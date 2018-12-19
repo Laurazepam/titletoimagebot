@@ -1,3 +1,3 @@
-# titletoimagebot
+# Title2ImageBot
 
-Currently in maintenance, no active development. Pull requests are welcome.
+Fork of Original bot by gerenook. 
