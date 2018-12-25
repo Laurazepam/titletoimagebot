@@ -7,7 +7,7 @@ This module contains important utilities for Title2ImageBot.
 java > python
 '''
 __author__ = 'calicocatalyst'
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 
 from PIL import Image, ImageDraw, ImageFont
@@ -70,6 +70,13 @@ def process_submission(submission, commenter=None, customargs=None):
         except OSError as error:
             logging.error('Converting to image failed, skipping submission | %s', error)
             return
+    except IOError as error:
+        print('Pillow couldn\'t process image, marking as parsed and skipping')
+        return None;
+    except Exception as error:
+        print(error)
+        print('Exception on image conversion lines.')
+        return None;
 
     image = RedditImage(img)
     image.add_title(title, False)

@@ -12,7 +12,7 @@ Depends:
 """
 
 author = 'calicocatalyst'
-version = '0.0.1'
+version = '0.1.1'
 
 import praw
 # Updated API Wrapper for imgur that handles the entirety of what we need to do
@@ -61,6 +61,8 @@ def _reply_imgur_url(url, submission, source_comment, upscaled=False):
     """
     print('Creating reply')
     if url == None:
+        print('Error Somewhere along the way. Marking as parsed and moving on')
+        catutils.add_parsed(submission.id)
         # Bot is being difficult and replying multiple times so lets try this :)
         return
     reply = template.format(
