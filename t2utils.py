@@ -7,7 +7,7 @@ This module contains important utilities for Title2ImageBot.
 java > python
 '''
 __author__ = 'calicocatalyst'
-__version__ = '0.0.2'
+__version__ = '0.0.3b'
 
 
 from PIL import Image, ImageDraw, ImageFont
@@ -229,7 +229,9 @@ class RedditImage:
         new.paste(self._image, (0, whitespace_height))
         draw = ImageDraw.Draw(new)
         for i, line in enumerate(lines):
-            draw.text((RedditImage.margin, i * line_height + RedditImage.margin),
+            w,h = self._font_title.getsize(line)
+            left_margin = (self._width - w)/2
+            draw.text((left_margin, i * line_height + RedditImage.margin),
                       line, text_color, self._font_title)
         self._width, self._height = new.size
         self._image = new

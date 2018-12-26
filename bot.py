@@ -12,7 +12,7 @@ Depends:
 """
 
 author = 'calicocatalyst'
-version = '0.1.1'
+version = '0.1.2b'
 
 import praw
 # Updated API Wrapper for imgur that handles the entirety of what we need to do
@@ -30,6 +30,8 @@ reddit = catutils.auth_reddit_from_config()
 
 template = (
     '[Image with added title]({image_url})\n\n'
+    '{upscaled}---\n\n'
+    'Currently Beta Testing Title Centering on Image :)'
     '{upscaled}---\n\n'
     'Summon me with /u/title2imagebot | '
     '[About](http://insxnity.live/t2ib) | '
