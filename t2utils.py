@@ -77,8 +77,12 @@ def process_submission(submission, commenter=None, customargs=None):
         print(error)
         print('Exception on image conversion lines.')
         return None;
-
-    image = RedditImage(img)
+    try:
+        image = RedditImage(img)
+    except Exception as error:
+        # TODO add error in debug line
+        print('Could not create RedditImage with error')
+        return None;
     image.add_title(title, False)
 
     imgur = catutils.get_imgur_client_config()
@@ -135,7 +139,7 @@ class RedditImage:
     min_size = 500
     # TODO find a font for all unicode chars & emojis
     # font_file = 'seguiemj.ttf'
-    font_file = 'roboto.ttf'
+    font_file = 'roboto-emoji.ttf'
     font_scale_factor = 16
     # Regex to remove resolution tag styled as such: '[1000 x 1000]'
     regex_resolution = re.compile(r'\s?\[[0-9]+\s?[xX*×]\s?[0-9]+\]')
@@ -220,6 +224,7 @@ class RedditImage:
         :param boot: if True, split title on [',', ';', '.'], else wrap text
         :type boot: bool
         """
+        beta_centering = False
         # remove resolution appended to title (e.g. '<title> [1000 x 1000]')
         title = RedditImage.regex_resolution.sub('', title)
         line_height = self._font_title.getsize(title)[1] + RedditImage.margin
@@ -230,7 +235,7 @@ class RedditImage:
         draw = ImageDraw.Draw(new)
         for i, line in enumerate(lines):
             w,h = self._font_title.getsize(line)
-            left_margin = (self._width - w)/2
+            left_margin = ((self._width - w)/2) if beta_centering else RedditImage.margin
             draw.text((left_margin, i * line_height + RedditImage.margin),
                       line, text_color, self._font_title)
         self._width, self._height = new.size
