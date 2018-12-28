@@ -10,8 +10,19 @@ Depends:
 > ImgurPython  
 > argparse  
 
-Syntax:
 
-> bot.py \<items> <time (s)>
 
-So for example, running `python bot.py 10 60` Would have the bot check the 10 most recent inbox items every 60 seconds and respond to them.
+```
+usage: bot.py [-h] [-d] [-l] limit interval
+
+Bot To Add Titles To Images
+
+positional arguments:
+  limit        amount of submissions/messages to process each cycle
+  interval     time (in seconds) to wait between cycles
+
+optional arguments:
+  -h, --help   show this help message and exit
+  -d, --debug  Enable Debug Logging
+  -l, --loop   Enable Looping Function
+```
