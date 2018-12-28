@@ -73,12 +73,21 @@ def _reply_imgur_url(url, submission, source_comment, upscaled=False):
     :returns: True on success, False on failure
     :rtype: bool
     """
-    logging.info('Creating reply')
     if url == None:
+        # This should return if the bot has already replied.
+        # So, lets check if the bot has already been here and reply with that instead!
+        for comment in submission.comments.list():
+            if comment.author.name == reddit.user.me().name and 'Image with added title' in comment.body:
+                if source_comment:
+                    comment_url = "https://reddit.com/comments/%s/_/%s" % (submission.id, comment.id)
+                    reply = "Looks like I've already responded in this thread [Here!](%s)" % comment_url
+                    source_comment.reply(reply)
+
         logging.warning('Error Somewhere along the way. Marking as parsed and moving on')
         catutils.add_parsed(submission.id)
         # Bot is being difficult and replying multiple times so lets try this :)
         return
+    logging.info('Creating reply')
     reply = template.format(
         image_url=url,
         upscaled=' (image was upscaled)\n\n' if upscaled else '',
