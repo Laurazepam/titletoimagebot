@@ -7,7 +7,7 @@ This module contains important utilities for Title2ImageBot.
 java > python
 '''
 __author__ = 'calicocatalyst'
-__version__ = '0.0.3b'
+__version__ = '0.0.4b'
 
 
 from PIL import Image, ImageDraw, ImageFont
@@ -258,11 +258,12 @@ class RedditImage:
         try:
             response = imgur.upload_image(path_png, title="Uploaded by /u/Title2ImageBot")
         except:
-            logging.warning('png upload failed, trying jpg | %s', error)
+            # Likely too large
+            logging.warning('png upload failed, trying jpg')
             try:
                 response = imgur.upload_image(path_jpg, title="Uploaded by /u/Title2ImageBot")
             except:
-                logging.error('jpg upload failed, returning | %s', error)
+                logging.error('jpg upload failed, returning')
                 return None
         finally:
             remove(path_png)

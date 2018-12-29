@@ -12,9 +12,10 @@ Depends:
 """
 
 author = 'calicocatalyst'
-version = '0.2.0'
+version = '0.2.1'
 
 import praw
+from praw.models import MoreComments
 # Updated API Wrapper for imgur that handles the entirety of what we need to do
 import pyimgur
 from PIL import Image, ImageDraw, ImageFont
@@ -77,11 +78,16 @@ def _reply_imgur_url(url, submission, source_comment, upscaled=False):
         # This should return if the bot has already replied.
         # So, lets check if the bot has already been here and reply with that instead!
         for comment in submission.comments.list():
+            if isinstance(comment, MoreComments):
+                continue
+            if not comment or comment.author == None:
+                continue
             if comment.author.name == reddit.user.me().name and 'Image with added title' in comment.body:
                 if source_comment:
                     comment_url = "https://reddit.com/comments/%s/_/%s" % (submission.id, comment.id)
                     reply = "Looks like I've already responded in this thread [Here!](%s)" % comment_url
                     source_comment.reply(reply)
+                    catutils.add_parsed(source_comment.id)
 
         logging.warning('Error Somewhere along the way. Marking as parsed and moving on')
         catutils.add_parsed(submission.id)
