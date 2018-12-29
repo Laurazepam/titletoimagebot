@@ -7,7 +7,7 @@ This module contains important utilities for Title2ImageBot.
 java > python
 '''
 __author__ = 'calicocatalyst'
-__version__ = '0.0.5b'
+__version__ = '0.0.6'
 
 
 from PIL import Image, ImageDraw, ImageFont
@@ -38,6 +38,11 @@ from prawcore.exceptions import RequestException, ResponseException
 
 def process_submission(submission, commenter=None, customargs=None):
     # TODO implement user selectable options on summons
+
+    # Make sure author account exists
+    if not submission.author:
+        catutils.add_parsed(submission.id)
+        return None;
 
     sub = submission.subreddit.display_name
     url = submission.url
