@@ -7,7 +7,7 @@ This module contains important utilities for Title2ImageBot.
 java > python
 '''
 __author__ = 'calicocatalyst'
-__version__ = '0.0.4b'
+__version__ = '0.0.5b'
 
 
 from PIL import Image, ImageDraw, ImageFont

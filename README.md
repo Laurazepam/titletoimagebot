@@ -1,8 +1,8 @@
 # Title2ImageBot
 
-Fork of Original bot by gerenook. 
+Fork of Original bot by gerenook.
 
-Depends: 
+Depends:
 
 > Praw    
 > Pillow  
@@ -10,6 +10,7 @@ Depends:
 > ImgurPython  
 > argparse  
 
+Roboto-Emoji is a custom font I created in FontForge that adds support for emojis
 
 
 ```

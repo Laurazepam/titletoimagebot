@@ -12,7 +12,7 @@ Depends:
 """
 
 author = 'calicocatalyst'
-version = '0.2.1'
+version = '0.2.2'
 
 import praw
 from praw.models import MoreComments
