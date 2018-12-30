@@ -4,19 +4,13 @@
 """
 Title2ImageBot
 Complete redesign of titletoimagebot by gerenook with non-deprecated apis
-Depends:
-  praw
-  pyimgur
-  Pillow
-
 """
 
 author = 'calicocatalyst'
-version = '0.2.2'
+version = '0.2.3'
 
 import praw
 from praw.models import MoreComments
-# Updated API Wrapper for imgur that handles the entirety of what we need to do
 import pyimgur
 from PIL import Image, ImageDraw, ImageFont
 
@@ -26,7 +20,6 @@ import t2utils
 import re
 import requests
 import time
-# java based library ( ͡° ͜ʖ ͡°)
 import logging
 
 reddit = catutils.auth_reddit_from_config()
@@ -39,7 +32,7 @@ template = (
     '[feedback](https://reddit.com/message/compose/'
     '?to=CalicoCatalyst&subject=feedback%20{submission_id}) | '
     '[source](https://github.com/calicocatalyst/titletoimagebot) | '
-    'Fork of /u/ TitleToImageBot'
+    'Fork of TitleToImageBot'
 )
 
 def check_mentions_for_requests(postlimit=10):
@@ -75,21 +68,22 @@ def _reply_imgur_url(url, submission, source_comment, upscaled=False):
     :rtype: bool
     """
     if url == None:
+
+        logging.info('URL returned as none.')
+        logging.debug('Checking if Bot Has Already Processed Submission')
         # This should return if the bot has already replied.
         # So, lets check if the bot has already been here and reply with that instead!
         for comment in submission.comments.list():
             if isinstance(comment, MoreComments):
+                # See praw docs on MoreComments
                 continue
             if not comment or comment.author == None:
+                # If the comment or comment author was deleted, skip it
                 continue
             if comment.author.name == reddit.user.me().name and 'Image with added title' in comment.body:
                 if source_comment:
-                    comment_url = "https://reddit.com/comments/%s/_/%s" % (submission.id, comment.id)
-                    reply = "Looks like I've already responded in this thread [Here!](%s)" % comment_url
-                    source_comment.reply(reply)
-                    catutils.add_parsed(source_comment.id)
+                    responded_already_reply(source_comment, comment, submission)
 
-        logging.warning('Error Somewhere along the way. Marking as parsed and moving on')
         catutils.add_parsed(submission.id)
         # Bot is being difficult and replying multiple times so lets try this :)
         return
@@ -112,6 +106,12 @@ def _reply_imgur_url(url, submission, source_comment, upscaled=False):
         return False
     catutils.add_parsed(submission.id)
     return True
+
+def responded_already_reply(source_comment, comment, submission):
+    comment_url = "https://reddit.com/comments/%s/_/%s" % (submission.id, comment.id)
+    reply = "Looks like I've already responded in this thread [Here!](%s)" % comment_url
+    source_comment.reply(reply)
+    catutils.add_parsed(source_comment.id)
 
 def process_submission(submission, source_comment, title):
     '''
