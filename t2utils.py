@@ -27,6 +27,8 @@ from io import BytesIO
 from logging.handlers import TimedRotatingFileHandler
 from math import ceil
 from os import remove
+from gfycat.client import GfycatClient
+
 
 import requests
 from imgurpython import ImgurClient
@@ -64,7 +66,8 @@ def process_submission(submission, commenter=None, customargs=None):
 
 
     if  url.endswith('.gif') or url.endswith('.gifv'):
-        return process_gif(submission)
+        return None;
+        # return process_gif(submission)
     # Attempt to grab the images
     try:
         response = requests.get(url)
@@ -197,27 +200,26 @@ def process_gif(submission):
 
         # The first successful image generation was 150MB, so lets see what all
         #       Can be done to not have that happen
-        size = 320, 240
-        thumbnail = frame.copy()
-        thumbnail.thumbnail(size, Image.ANTIALIAS)
-
-
-frames = thumbnails(frames)
 
     	# Then append the single frame image to a list of frames
     	frames.append(frame)
     # Save the frames as a new image
     path_gif = 'temp.gif'
+    path_mp4 = 'temp.mp4'
     frames[0].save(path_gif, save_all=True, append_images=frames[1:])
+    # ff = ffmpy.FFmpeg(inputs={path_gif: None},outputs={path_mp4: None})
+    # ff.run()
 
     imgur = catutils.get_imgur_client_config()
     # try:
-    response = imgur.upload_image(path_gif, title="Gif Uploaded by /u/Title2ImageBot")
+    client = GfycatClient()
+
+    response = client.upload_from_file(path_gif)
     # except:
     #     logging.error('Gif Upload Failed, Returning')
     #     return None
-
-    return response.link
+    remove(path_gif)
+    return response.get("gifUrl")
 
 
 #==========
