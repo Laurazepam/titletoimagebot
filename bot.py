@@ -4,10 +4,14 @@
 """
 Title2ImageBot
 Complete redesign of titletoimagebot by gerenook with non-deprecated apis
+
+This file contains the main methods, and the methods to handle post processing
+Image Processing / Imgur Uploading is done in t2utils
+
 """
 
 author = 'calicocatalyst'
-version = '0.2.3'
+version = '0.2.4b'
 
 import praw
 from praw.models import MoreComments
@@ -26,6 +30,8 @@ reddit = catutils.auth_reddit_from_config()
 
 template = (
     '[Image with added title]({image_url})\n\n'
+    '{upscaled}---\n\n'
+    'Currently Beta Testing Gif Processing\n\n'
     '{upscaled}---\n\n'
     'Summon me with /u/title2imagebot | '
     '[About](http://insxnity.live/t2ib) | '

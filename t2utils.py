@@ -7,10 +7,10 @@ This module contains important utilities for Title2ImageBot.
 java > python
 '''
 __author__ = 'calicocatalyst'
-__version__ = '0.0.6'
+__version__ = '0.0.7b'
 
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageSequence
 import praw
 import pyimgur
 import catutils
@@ -55,7 +55,6 @@ def process_submission(submission, commenter=None, customargs=None):
     #   To post.
     not_parsed = not catutils.check_if_parsed(submission.id)
     # TODO add gif support
-    is_not_gif = url.endswith('.gif') or url.endswith('.gifv')
 
     checks = [not_parsed]
 
@@ -63,6 +62,9 @@ def process_submission(submission, commenter=None, customargs=None):
         print("Checks failed, not submitting")
         return;
 
+
+    if  url.endswith('.gif') or url.endswith('.gifv'):
+        return process_gif(submission)
     # Attempt to grab the images
     try:
         response = requests.get(url)
@@ -129,6 +131,94 @@ def get_automatic_processing_subs(config_file="config.ini"):
 '''
 
 '''
+
+def process_gif(submission):
+    sub = submission.subreddit.display_name
+    url = submission.url
+    title = submission.title
+    author = submission.author.name
+
+    # If its a gifv and hosted on imgur, we're ok, anywhere else I cant verify it works
+    if 'imgur' in url and url.endswith("gifv"):
+        # imgur will give us a (however large) gif if we ask for it
+        # thanks imgur <3
+        url = url.rstrip('v')
+    # Reddit Hosted gifs are going to be absolute hell, served via DASH which
+    #       Can be checked through a fallback url :)
+    try:
+        response = requests.get(url)
+    # except OSError as error:
+    #     logging.warning('Converting to image failed, trying with <url>.jpg | %s', error)
+    #     try:
+    #         response = requests.get(url + '.jpg')
+    #         img = Image.open(BytesIO(response.content))
+    #     except OSError as error:
+    #         logging.error('Converting to image failed, skipping submission | %s', error)
+            #return
+    except IOError as error:
+        print('Pillow couldn\'t process image, marking as parsed and skipping')
+        return None;
+    except Exception as error:
+        print(error)
+        print('Exception on image conversion lines.')
+        return None;
+    except:
+        logging.error("Could not get image from url")
+        return None;
+
+    img = Image.open(BytesIO(response.content))
+    frames = []
+
+    # Process Gif
+
+    # Loop over each frame in the animated image
+    for frame in ImageSequence.Iterator(img):
+    	# Draw the text on the frame
+
+        # We'll create a custom RedditImage for each frame to avoid
+        #      redundant code
+
+        # TODO: Consolidate this entire method into RedditImage. I want to make
+        #       Sure this works before I integrate.
+
+        rFrame = RedditImage(frame)
+        rFrame.add_title(title, False)
+
+        frame = rFrame._image
+    	# However, 'frame' is still the animated image with many frames
+    	# It has simply been seeked to a later frame
+    	# For our list of frames, we only want the current frame
+
+    	# Saving the image without 'save_all' will turn it into a single frame image, and we can then re-open it
+    	# To be efficient, we will save it to a stream, rather than to file
+    	b = BytesIO()
+    	frame.save(b, format="GIF")
+    	frame = Image.open(b)
+
+        # The first successful image generation was 150MB, so lets see what all
+        #       Can be done to not have that happen
+        size = 320, 240
+        thumbnail = frame.copy()
+        thumbnail.thumbnail(size, Image.ANTIALIAS)
+
+
+frames = thumbnails(frames)
+
+    	# Then append the single frame image to a list of frames
+    	frames.append(frame)
+    # Save the frames as a new image
+    path_gif = 'temp.gif'
+    frames[0].save(path_gif, save_all=True, append_images=frames[1:])
+
+    imgur = catutils.get_imgur_client_config()
+    # try:
+    response = imgur.upload_image(path_gif, title="Gif Uploaded by /u/Title2ImageBot")
+    # except:
+    #     logging.error('Gif Upload Failed, Returning')
+    #     return None
+
+    return response.link
+
 
 #==========
 # RedditImage
