@@ -12,6 +12,7 @@ Depends:
 
 Roboto-Emoji is a custom font I created in FontForge that adds support for emojis
 
+Gif Processing is failing in multiple areas. Working on it as much as I can.
 
 ```
 usage: bot.py [-h] [-d] [-l] limit interval
