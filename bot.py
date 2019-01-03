@@ -11,7 +11,7 @@ Image Processing / Imgur Uploading is done in t2utils
 """
 
 author = 'calicocatalyst'
-version = '0.2.4b'
+version = '0.2.5'
 
 import praw
 from praw.models import MoreComments
@@ -29,9 +29,7 @@ import logging
 reddit = catutils.auth_reddit_from_config()
 
 template = (
-    '[Image with added title]({image_url})\n\n'
-    '{upscaled}---\n\n'
-    'Happy New Years!'
+    '[Image with added title]({image_url}) {nsfw}\n\n'
     '{upscaled}---\n\n'
     'Summon me with /u/title2imagebot | '
     '[About](http://insxnity.live/t2ib) | '
@@ -96,6 +94,7 @@ def _reply_imgur_url(url, submission, source_comment, upscaled=False):
     logging.info('Creating reply')
     reply = template.format(
         image_url=url,
+        nsfw="(NSFW)" if submission.over_18 else '',
         upscaled=' (image was upscaled)\n\n' if upscaled else '',
         submission_id=submission.id
     )
