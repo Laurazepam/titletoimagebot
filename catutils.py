@@ -59,6 +59,22 @@ def get_imgur_client_config(config_file="config.ini"):
     return(pyimgur.Imgur(config['ImgurAuth']['publicKey']))
 
 # ----------------------
+# GfyCat Auth stuff
+# ----------------------
+
+def get_gfycat_body_config(config_file="config.ini"):
+    config = configparser.ConfigParser()
+    config.read(config_file)
+    bodyTemplate = {
+        "grant_type": "password",
+        "client_id": config['GfyCatAuth']['publicKey'],
+        "client_secret": config['GfyCatAuth']['privateKey'],
+        "username": config['GfyCatAuth']['username'],
+        "password": config['GfyCatAuth']['password']
+    }
+    return bodyTemplate
+
+# ----------------------
 # Interact with ModTools Usernotes Database
 # ----------------------
 

@@ -66,8 +66,8 @@ def process_submission(submission, commenter=None, customargs=None):
 
 
     if  url.endswith('.gif') or url.endswith('.gifv'):
-        return None;
-        # return process_gif(submission)
+        # Lets try this again.
+        return process_gif(submission)
     # Attempt to grab the images
     try:
         response = requests.get(url)
@@ -124,6 +124,7 @@ def get_automatic_processing_subs(config_file="config.ini"):
     sections = config.sections()
     sections.remove('RedditAuth')
     sections.remove('ImgurAuth')
+    sections.remove('GfyCatAuth')
     return sections
 
 
