@@ -31,6 +31,9 @@ reddit = catutils.auth_reddit_from_config()
 template = (
     '[Image with added title]({image_url}) {nsfw}\n\n'
     '{upscaled}---\n\n'
+    'Testing Gif/GfyCat Support\n\n'
+    '---\n\n'
+
     'Summon me with /u/title2imagebot | '
     '[About](http://insxnity.live/t2ib) | '
     '[feedback](https://reddit.com/message/compose/'
