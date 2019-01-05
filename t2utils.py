@@ -135,6 +135,7 @@ def get_automatic_processing_subs(config_file="config.ini"):
 '''
 
 '''
+import t2gfycat
 
 def process_gif(submission):
     sub = submission.subreddit.display_name
@@ -213,14 +214,12 @@ def process_gif(submission):
 
     imgur = catutils.get_imgur_client_config()
     # try:
-    client = GfycatClient()
-
-    response = client.upload_from_file(path_gif)
     # except:
     #     logging.error('Gif Upload Failed, Returning')
     #     return None
+    url = t2gfycat.upload_file(path_gif)
     remove(path_gif)
-    return response.get("gifUrl")
+    return url
 
 
 #==========
