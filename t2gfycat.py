@@ -12,6 +12,13 @@ FILE_UPLOAD_STATUS_ENDPOINT = 'https://api.gfycat.com/v1/gfycats/fetch/status/{}
 # URL for what your GfyCat URL is going to be
 gfyUrl = 'https://gfycat.com/{}'
 
+gifParam = {
+    "title": "Gif Uploaded by /u/Title2ImageBot",
+    "description": "An amazing Gif",
+    "private": True,
+    "noMd5": True
+    }
+
 import requests as req
 import time, json
 
@@ -33,8 +40,8 @@ def upload_file(file_name):
 def _auth_headers():
 
 
-    body = json.dumps(catutils.get_gfycat_body_config())
-
+    body = catutils.get_gfycat_body_config()
+    logging.debug(body)
     # Get a token
     token = req.post(TOKEN_ENDPOINT, json=body)
     access_token = token.json().get("access_token")
@@ -66,11 +73,12 @@ def _upload_file(gfyID, videoName):
 
     with open(videoName, 'rb') as payload:
         files = {
-            'key': gfyID,
             'file': (videoName, payload),
+            'key': gfyID,
         }
         res = req.post(FILE_UPLOAD_ENDPOINT, files=files)
 
+    logging.debug(res.text)
     # Check if it's done uploading
     while uploadStatus != "complete":
         checkReturn = req.get(FILE_UPLOAD_STATUS_ENDPOINT.format(gfyID))

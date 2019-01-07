@@ -28,7 +28,7 @@ from logging.handlers import TimedRotatingFileHandler
 from math import ceil
 from os import remove
 from gfycat.client import GfycatClient
-
+import ffmpy
 
 import requests
 from imgurpython import ImgurClient
@@ -152,17 +152,21 @@ def process_gif(submission):
     #       Can be checked through a fallback url :)
     try:
         response = requests.get(url)
-    # except OSError as error:
-    #     logging.warning('Converting to image failed, trying with <url>.jpg | %s', error)
-    #     try:
-    #         response = requests.get(url + '.jpg')
-    #         img = Image.open(BytesIO(response.content))
-    #     except OSError as error:
-    #         logging.error('Converting to image failed, skipping submission | %s', error)
-            #return
+    # Try to get an image if someone linked to imgur but didn't put the .file ext.
+    except OSError as error:
+        logging.warning('Converting to image failed, trying with <url>.jpg | %s', error)
+        try:
+            response = requests.get(url + '.jpg')
+            img = Image.open(BytesIO(response.content))
+        # If that wasn't the case
+        except OSError as error:
+            logging.error('Converting to image failed, skipping submission | %s', error)
+            return
+    # Lord knows
     except IOError as error:
         print('Pillow couldn\'t process image, marking as parsed and skipping')
         return None;
+    # The nature of this throws tons of exceptions based on what users throw at the bot
     except Exception as error:
         print(error)
         print('Exception on image conversion lines.')
@@ -219,6 +223,7 @@ def process_gif(submission):
     #     return None
     url = t2gfycat.upload_file(path_gif)
     remove(path_gif)
+    # remove(path_mp4)
     return url
 
 
