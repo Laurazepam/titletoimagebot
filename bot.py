@@ -148,13 +148,16 @@ def process_message(message):
     #       So I'm leaving it for now.
     if not message.author:
         return
-
     author = message.author.name
     subject = message.subject.lower()
     body_original = message.body
     body = message.body.lower()
     if catutils.check_if_parsed(message.id):
         logging.debug("bot.process_message() Message %s Already Parsed, Returning", message.id)
+        return
+    if message.author.name.lower()=="the-paranoid-android":
+        message.reply("Thanks Marv")
+        catutils.add_parsed(message.id)
         return
     # Skip Messages Sent by Bot
     if author == reddit.user.me().name:
