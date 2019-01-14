@@ -67,7 +67,11 @@ def process_submission(submission, commenter=None, customargs=None):
 
     if  url.endswith('.gif') or url.endswith('.gifv'):
         # Lets try this again.
-        return process_gif(submission)
+        try:
+            return process_gif(submission)
+        except:
+            logging.warn("gif upload failed")
+            return None
     # Attempt to grab the images
     try:
         response = requests.get(url)
@@ -217,12 +221,13 @@ def process_gif(submission):
     # ff.run()
 
     imgur = catutils.get_imgur_client_config()
-    # try:
-    # except:
-    #     logging.error('Gif Upload Failed, Returning')
-    #     return None
-    url = t2gfycat.upload_file(path_gif)
-    remove(path_gif)
+    try:
+        url = t2gfycat.upload_file(path_gif)
+        remove(path_gif)
+    except:
+        logging.error('Gif Upload Failed, Returning')
+        remove(path_gif)
+        return None
     # remove(path_mp4)
     return url
 

@@ -31,8 +31,6 @@ reddit = catutils.auth_reddit_from_config()
 template = (
     '[Image with added title]({image_url}) {nsfw}\n\n'
     '{upscaled}---\n\n'
-    'Testing Gif/GfyCat Support\n\n'
-    '---\n\n'
 
     'Summon me with /u/title2imagebot | '
     '[About](http://insxnity.live/t2ib) | '
@@ -157,6 +155,7 @@ def process_message(message):
         return
     if message.author.name.lower()=="the-paranoid-android":
         message.reply("Thanks Marv")
+        logging.info("Thanking marv")
         catutils.add_parsed(message.id)
         return
     # Skip Messages Sent by Bot
