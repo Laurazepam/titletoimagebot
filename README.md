@@ -2,6 +2,8 @@
 
 Fork of Original bot by gerenook.
 
+The eventual goal is to return it to something that looks similar to the bot when it was originally forked. Right now it's spaghetti and above all else this should've been a branch in the first place. Sorry!
+
 Depends:
 
 > Praw    
