@@ -110,7 +110,7 @@ class TitleToImageBot(object):
     
     def responded_already_reply(self, source_comment, comment, submission):
         com_url = messages.comment_url.format(postid=submission.id, commentid=comment.id)
-        reply = messages.already_responded_message.format(comment_url=com_url)
+        reply = messages.already_responded_message.format(commentlink=com_url)
         
         source_comment.reply(reply)
         
