@@ -2,19 +2,24 @@
 
 Fork of Original bot by gerenook.
 
-The eventual goal is to return it to something that looks similar to the bot when it was originally forked. Right now it's spaghetti and above all else this should've been a branch in the first place. Sorry!
+After a ton of work starting from what's essentially scratch with the bot, we're approaching what it looked like pre-fork. Next step is a database implementation that will allow us to let users choose formats. 
 
 Depends:
 
 > Praw    
 > Pillow  
 > PyImgur  
+> GfyPy
 > ImgurPython  
 > argparse  
 
 Roboto-Emoji is a custom font I created in FontForge that adds support for emojis
 
-Gif Processing is failing in multiple areas. Working on it as much as I can.
+Where we are with gif processing:
+
+I can reliably grab imgur gifs. GfyPy should be able to grab gfys for me whenever I get around to writing that particular fetcher in gfypy. 
+
+I can upload to GfyCat using the API I wrote, but recently I've been getting weird unexplainable bugs. 
 
 ```
 usage: bot.py [-h] [-d] [-l] limit interval
