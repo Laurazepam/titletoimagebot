@@ -11,13 +11,14 @@ Image Processing / Imgur Uploading is done in t2utils
 """
 
 author = 'calicocatalyst'
-version = '0.3dev'
+version = '0.3b'
 
 import praw
 from praw.models import MoreComments, Comment
 import pyimgur
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageSequence
 
+from gfypy import gfycat
 import argparse
 import messages
 import time
@@ -386,8 +387,7 @@ def process_image_submission(submission, commenter=None, customargs=None):
     if  url.endswith('.gif') or url.endswith('.gifv'):
         # Lets try this again.
         try:
-            # return process_gif(submission)
-            return None
+            return process_gif(submission)
         except:
             logging.warn("gif upload failed")
             return None
@@ -423,98 +423,104 @@ def process_image_submission(submission, commenter=None, customargs=None):
 
     return imgur_url
 
-#===============================================================================
-# def process_gif(submission):
-#     sub = submission.subreddit.display_name
-#     url = submission.url
-#     title = submission.title
-#     author = submission.author.name
-# 
-#     # If its a gifv and hosted on imgur, we're ok, anywhere else I cant verify it works
-#     if 'imgur' in url and url.endswith("gifv"):
-#         # imgur will give us a (however large) gif if we ask for it
-#         # thanks imgur <3
-#         url = url.rstrip('v')
-#     # Reddit Hosted gifs are going to be absolute hell, served via DASH which
-#     #       Can be checked through a fallback url :)
-#     try:
-#         response = requests.get(url)
-#     # Try to get an image if someone linked to imgur but didn't put the .file ext.
-#     except OSError as error:
-#         logging.warning('Converting to image failed, trying with <url>.jpg | %s', error)
-#         try:
-#             response = requests.get(url + '.jpg')
-#             img = Image.open(BytesIO(response.content))
-#         # If that wasn't the case
-#         except OSError as error:
-#             logging.error('Converting to image failed, skipping submission | %s', error)
-#             return
-#     # Lord knows
-#     except IOError as error:
-#         print('Pillow couldn\'t process image, marking as parsed and skipping')
-#         return None;
-#     # The nature of this throws tons of exceptions based on what users throw at the bot
-#     except Exception as error:
-#         print(error)
-#         print('Exception on image conversion lines.')
-#         return None;
-#     except:
-#         logging.error("Could not get image from url")
-#         return None;
-# 
-#     img = Image.open(BytesIO(response.content))
-#     frames = []
-# 
-#     # Process Gif
-# 
-#     # Loop over each frame in the animated image
-#     for frame in ImageSequence.Iterator(img):
-#         # Draw the text on the frame
-# 
-#         # We'll create a custom RedditImage for each frame to avoid
-#         #      redundant code
-# 
-#         # TODO: Consolidate this entire method into RedditImage. I want to make
-#         #       Sure this works before I integrate.
-# 
-#         rFrame = RedditImage(frame)
-#         rFrame.add_title(title, False)
-# 
-#         frame = rFrame._image
-#         # However, 'frame' is still the animated image with many frames
-#         # It has simply been seeked to a later frame
-#         # For our list of frames, we only want the current frame
-# 
-#         # Saving the image without 'save_all' will turn it into a single frame image, and we can then re-open it
-#         # To be efficient, we will save it to a stream, rather than to file
-#         b = BytesIO()
-#         frame.save(b, format="GIF")
-#         frame = Image.open(b)
-# 
-#         # The first successful image generation was 150MB, so lets see what all
-#         #       Can be done to not have that happen
-# 
-#         # Then append the single frame image to a list of frames
-#         frames.append(frame)
-#     # Save the frames as a new image
-#     path_gif = 'temp.gif'
-#     path_mp4 = 'temp.mp4'
-#     frames[0].save(path_gif, save_all=True, append_images=frames[1:])
-#     # ff = ffmpy.FFmpeg(inputs={path_gif: None},outputs={path_mp4: None})
-#     # ff.run()
-# 
-#     try:
-#         url = t2gfycat.upload_file(path_gif)
-#         remove(path_gif)
-#     except:
-#         logging.error('Gif Upload Failed, Returning')
-#         remove(path_gif)
-#         return None
-#     # remove(path_mp4)
-#     return url
-#===============================================================================
+def process_gif(submission):
+    sub = submission.subreddit.display_name
+    url = submission.url
+    title = submission.title
+    author = submission.author.name
+ 
+    # If its a gifv and hosted on imgur, we're ok, anywhere else I cant verify it works
+    if 'imgur' in url and url.endswith("gifv"):
+        # imgur will give us a (however large) gif if we ask for it
+        # thanks imgur <3
+        url = url.rstrip('v')
+    # Reddit Hosted gifs are going to be absolute hell, served via DASH which
+    #       Can be checked through a fallback url :)
+    try:
+        response = requests.get(url)
+    # Try to get an image if someone linked to imgur but didn't put the .file ext.
+    except OSError as error:
+        logging.warning('Converting to image failed, trying with <url>.jpg | %s', error)
+        try:
+            response = requests.get(url + '.jpg')
+            img = Image.open(BytesIO(response.content))
+        # If that wasn't the case
+        except OSError as error:
+            logging.error('Converting to image failed, skipping submission | %s', error)
+            return
+    # Lord knows
+    except IOError as error:
+        print('Pillow couldn\'t process image, marking as parsed and skipping')
+        return None;
+    # The nature of this throws tons of exceptions based on what users throw at the bot
+    except Exception as error:
+        print(error)
+        print('Exception on image conversion lines.')
+        return None;
+    except:
+        logging.error("Could not get image from url")
+        return None;
+ 
+    img = Image.open(BytesIO(response.content))
+    frames = []
+ 
+    # Process Gif
+ 
+    # Loop over each frame in the animated image
+    for frame in ImageSequence.Iterator(img):
+        # Draw the text on the frame
+ 
+        # We'll create a custom RedditImage for each frame to avoid
+        #      redundant code
+ 
+        # TODO: Consolidate this entire method into RedditImage. I want to make
+        #       Sure this works before I integrate.
+ 
+        rFrame = RedditImage(frame)
+        rFrame.add_title(title, False)
+ 
+        frame = rFrame._image
+        # However, 'frame' is still the animated image with many frames
+        # It has simply been seeked to a later frame
+        # For our list of frames, we only want the current frame
+ 
+        # Saving the image without 'save_all' will turn it into a single frame image, and we can then re-open it
+        # To be efficient, we will save it to a stream, rather than to file
+        b = BytesIO()
+        frame.save(b, format="GIF")
+        frame = Image.open(b)
+ 
+        # The first successful image generation was 150MB, so lets see what all
+        #       Can be done to not have that happen
+ 
+        # Then append the single frame image to a list of frames
+        frames.append(frame)
+    # Save the frames as a new image
+    path_gif = 'temp.gif'
+    path_mp4 = 'temp.mp4'
+    frames[0].save(path_gif, save_all=True, append_images=frames[1:])
+    # ff = ffmpy.FFmpeg(inputs={path_gif: None},outputs={path_mp4: None})
+    # ff.run()
+ 
+    try:
+        url = get_gfycat_client_config().upload_file(path_gif).url
+        remove(path_gif)
+    except:
+        logging.error('Gif Upload Failed, Returning')
+        remove(path_gif)
+        return None
+    # remove(path_mp4)
+    return url
 
-
+def get_gfycat_client_config(config_file="config.ini"):
+    config = configparser.ConfigParser()
+    config.read(config_file)
+    client_id = config['GfyCatAuth']['publicKey']
+    client_secret = config['GfyCatAuth']['privateKey']
+    username = config['GfyCatAuth']['username']
+    password = config['GfyCatAuth']['password']
+    client = gfycat.GfyCatClient(client_id,client_secret,username,password)
+    return client
 
 def auth_reddit_from_config(config_file='config.ini'):
     config = configparser.ConfigParser()
