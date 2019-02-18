@@ -1,11 +1,11 @@
-'''
+"""
 Created on Jan 25, 2019
 
 @author: Insxnity
-'''
+"""
 
 standard_reply_template = '''[Image with added title]({image_url}) {nsfw}\n\n
-{upscaled}---\n\n
+{upscaled}---\n\n Public Beta Test of Universal Unicode Support with notosans \n\n
 Summon me with /u/title2imagebot | 
 [About](http://insxnity.live/t2ib) | 
 [feedback](https://reddit.com/message/compose/

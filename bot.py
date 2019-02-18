@@ -9,55 +9,88 @@ This file contains the main methods, and the methods to handle post processing
 Image Processing / Imgur Uploading is done in t2utils
 
 """
-
-author = 'calicocatalyst'
-version = '0.3b'
-
-import praw
-from praw.models import MoreComments, Comment
-import pyimgur
-from PIL import Image, ImageDraw, ImageFont, ImageSequence
-
-from gfypy import gfycat
 import argparse
-import messages
-import time
+import configparser
 import logging
+import re
+import sqlite3
+import time
+from io import BytesIO
 from math import ceil
 from os import remove
-import re
-import requests
-from io import BytesIO
 
-import configparser
+import praw
+import praw.exceptions
+import praw.models
+import pyimgur
+import requests
+from PIL import Image, ImageDraw, ImageFont, ImageSequence
+from gfypy import gfycat
+
+import messages
+
+__author__ = 'calicocatalyst'
+__version__ = '0.3b'
 
 
 class TitleToImageBot(object):
-    def __init__(self):
-        pass
+    def __init__(self, config, database):
+        """
+
+        :type database: BotDatabase
+        :type config: Configuration
+        """
+        self.config = config
+        self.reddit = self.config.auth_reddit_from_config()
+        self.imgur = self.config.get_imgur_client_config()
+        self.gfycat = self.config.get_gfycat_client_config()
+
+        self.database = database
+
     def check_mentions_for_requests(self, postlimit=10):
-        for message in reddit.inbox.all(limit=postlimit):
+        for message in self.reddit.inbox.all(limit=postlimit):
             self.process_message(message)
+
     def check_subs_for_posts(self, postlimit=25):
-        subs = get_automatic_processing_subs()
+        subs = self.config.get_automatic_processing_subs()
         for sub in subs:
-            boot = sub == 'boottoobig'
-            subr = reddit.subreddit(sub)
+            subr = self.reddit.subreddit(sub)
             for post in subr.new(limit=postlimit):
-                if check_if_parsed(post.id):
+                if self.database.submission_exists(post.id):
                     continue
                 title = post.title
-                if boot:
-                    triggers = [',', ';', 'roses']
+
+                has_triggers = self.config.configfile.has_option(sub, 'triggers')
+                has_threshold = self.config.configfile.has_option(sub, 'threshold')
+
+                if has_triggers:
+                    triggers = str(self.config.configfile[sub]['triggers']).split('|')
                     if not any(t in title.lower() for t in triggers):
-                        logging.debug('Title is probably not part of rhyme, skipping submission')
-                        add_parsed(post.id)
+                        logging.info('Title %s doesnt appear to contain any of %s, adding to parsed and skipping'
+                                     % (title, self.config.configfile[sub]["triggers"]))
+                        self.database.submission_insert(post.id, post.author.name, title, post.url)
                         continue
+                else:
+                    logging.debug('No triggers were defined for %s, not checking' % sub)
+
+                if has_threshold:
+                    threshold = int(self.config.configfile[sub]['threshold'])
+                    if post.score < threshold:
+                        logging.debug('Threshold not met, not adding to parsed, just ignoring')
+                        continue
+                    else:
+                        logging.debug('Threshold met, posting and adding to parsed')
+                else:
+                    logging.debug('No threshold for %s, replying to everything :)' % sub)
                 self.process_submission(post, None, None)
-                add_parsed(post.id)
-    
+                if self.database.submission_exists(post.id):
+                    continue
+                else:
+                    self.database.submission_insert(post.id, post.author.name, title, post.url)
+
     def reply_imgur_url(self, url, submission, source_comment, upscaled=False):
         """
+        :param upscaled:
         :param url: Imgur Url
         :type url: str
         :param submission: Submission that the post was on. Reply if source_comment = False
@@ -67,24 +100,28 @@ class TitleToImageBot(object):
         :returns: True on success, False on failure
         :rtype: bool
         """
-        if url == None:
-    
+        if url is None:
+
             logging.info('URL returned as none.')
             logging.debug('Checking if Bot Has Already Processed Submission')
             # This should return if the bot has already replied.
             # So, lets check if the bot has already been here and reply with that instead!
             for comment in submission.comments.list():
-                if isinstance(comment, MoreComments):
+                if isinstance(comment, praw.models.MoreComments):
                     # See praw docs on MoreComments
                     continue
-                if not comment or comment.author == None:
+                if not comment or comment.author is None:
                     # If the comment or comment author was deleted, skip it
                     continue
-                if comment.author.name == reddit.user.me().name and 'Image with added title' in comment.body:
+                if comment.author.name == self.reddit.user.me().name and 'Image with added title' in comment.body:
                     if source_comment:
                         self.responded_already_reply(source_comment, comment, submission)
-    
-            add_parsed(submission.id)
+
+            if self.database.message_exists(source_comment.id):
+                return
+            else:
+                self.database.message_insert(source_comment.id, source_comment.author.name, "comment reply",
+                                             source_comment.body)
             # Bot is being difficult and replying multiple times so lets try this :)
             return
         logging.info('Creating reply')
@@ -105,33 +142,32 @@ class TitleToImageBot(object):
         except Exception as error:
             logging.error('Cannot reply, skipping submission | %s', error)
             return False
-        add_parsed(submission.id)
+        self.database.submission_insert(submission.id, submission.author.name, submission.title, url)
         return True
-    
+
     def responded_already_reply(self, source_comment, comment, submission):
         com_url = messages.comment_url.format(postid=submission.id, commentid=comment.id)
         reply = messages.already_responded_message.format(commentlink=com_url)
-        
+
         source_comment.reply(reply)
-        
-        add_parsed(source_comment.id)
-    
+        self.database.message_insert(source_comment.id, comment.author.name, "comment reply", source_comment.body)
+
     def process_submission(self, submission, source_comment, title):
-        '''
+        """
         Process Submission Using t2utils given the above args, and use the other
             provided function to reply
-    
+
         :param submission: Submission object containing image to parse
         :type submission: praw.models.submission
         :param source_comment: Comment that invoked if any did, may be NoneType
-        :type source_comment: praw.models.Comment
+        :type source_comment: praw.models.Comment, None
         :param title: Custom title if any (Currently it will always be None)
         :type title: String
-        '''
-    
-        url = process_image_submission(submission)
+        """
+        _ = title
+        url = self.process_image_submission(submission)
         self.reply_imgur_url(url, submission, source_comment)
-    
+
     def process_message(self, message):
         """Process given message (remove, feedback, mark good/bad bot as read)
     
@@ -140,32 +176,32 @@ class TitleToImageBot(object):
         """
         if not message.author:
             return
-        author = message.author.name
+        message_author = message.author.name
         subject = message.subject.lower()
-        body_original = message.body
+        # body_original = message.body
         body = message.body.lower()
-        if check_if_parsed(message.id):
+        if self.database.message_exists(message.id):
             logging.debug("bot.process_message() Message %s Already Parsed, Returning", message.id)
             return
-        if message.author.name.lower()=="the-paranoid-android":
+        if message_author.lower() == "the-paranoid-android":
             message.reply("Thanks Marv")
             logging.info("Thanking marv")
-            add_parsed(message.id)
+            self.database.message_insert(message.id, message_author, message.subject.lower(), body)
             return
         # Skip Messages Sent by Bot
-        if author == reddit.user.me().name:
+        if message_author == self.reddit.user.me().name:
             logging.debug('Message was sent, returning')
             return
         # process message
-        if (isinstance(message, Comment) and
+        if (isinstance(message, praw.models.Comment) and
                 (subject == 'username mention' or
                  (subject == 'comment reply' and 'u/title2imagebot' in body))):
-            # Dont reply to automod.
+
             if message.author.name.lower() == 'automoderator':
                 message.mark_read()
                 return
-    
-            match = False
+
+            match = None
             title = None
             if match:
                 title = match.group(1)
@@ -174,7 +210,7 @@ class TitleToImageBot(object):
                 else:
                     logging.debug('Found custom title: %s', title)
             self.process_submission(message.submission, message, title)
-    
+
             message.mark_read()
         elif subject.startswith('feedback'):
             logging.debug("TODO: add feedback forwarding support")
@@ -185,15 +221,207 @@ class TitleToImageBot(object):
         elif 'bad bot' in body and len(body) < 12:
             logging.debug('Bad bot message or comment reply found, marking as read')
             message.mark_read()
-        add_parsed(message.id)
-        
+
+        # Check if the bot has processed already, if so we dont need to do anything. If it hasn't,
+        # add it to the database and move on
+        if self.database.message_exists(message.id):
+            logging.debug("bot.process_message() Message %s Already Parsed, no need to add", message.id)
+            return
+        else:
+            self.database.message_insert(message.id, message_author, subject, body)
+
+    # noinspection PyUnusedLocal
+    def process_image_submission(self, submission, commenter=None, customargs=None):
+        """
+
+        :param submission: Submission that points to a URL we need to process
+        :type submission: praw.models.Submission
+        :param commenter: Commenter who requested the thing
+        :type commenter: praw.models.Redditor
+        :param customargs: List of custom arguments. Not implemented, but lets be ready for it once we figure out how
+        :type customargs: List
+        :return: URL the image has been uploaded to, None if it failed to upload
+        :rtype: String, None
+        """
+        # TODO implement user selectable options on summons
+
+        # Make sure author account exists
+        if not submission.author:
+            self.database.submission_insert(submission.id, submission.author.name, submission.title, submission.url)
+            return None
+
+        sub = submission.subreddit.display_name
+        url = submission.url
+        title = submission.title
+        submission_author = submission.author.name
+
+        # We need to verify everything is good to go
+        # Check every item in this list and verify it is 'True'
+        # If the submission has been parsed, throw false which will not allow the Bot
+        #   To post.
+        not_parsed = not self.database.submission_exists(submission.id)
+
+        checks = [not_parsed]
+
+        if not all(checks):
+            print("Checks failed, not submitting")
+            return None
+
+        if url.endswith('.gif') or url.endswith('.gifv'):
+            # Lets try this again.
+            # noinspection PyBroadException
+            try:
+                return self.process_gif(submission)
+            except Exception as ex:
+                logging.warning("gif upload failed with %s" % ex)
+                return None
+        # Attempt to grab the images
+        try:
+            response = requests.get(url)
+            img = Image.open(BytesIO(response.content))
+        except (OSError, IOError) as error:
+            logging.warning('Converting to image failed, trying with <url>.jpg | %s', error)
+            try:
+                response = requests.get(url + '.jpg')
+                img = Image.open(BytesIO(response.content))
+            except (OSError, IOError) as error:
+                logging.error('Converting to image failed, skipping submission | %s', error)
+                return None
+        except Exception as error:
+            print(error)
+            print('Exception on image conversion lines.')
+            return None
+        # noinspection PyBroadException
+        try:
+            image = RedditImage(img)
+        except Exception as error:
+            print('Could not create RedditImage with %s' % error)
+            return None
+        image.add_title(title, False)
+
+        imgur_url = self.upload(image)
+
+        return imgur_url
+
+    def process_gif(self, submission):
+        """
+
+        :param submission:
+        :type submission: praw.models.Submission
+        """
+        # sub = submission.subreddit.display_name
+        url = submission.url
+        title = submission.title
+        # author = submission.author.name
+
+        # If its a gifv and hosted on imgur, we're ok, anywhere else I cant verify it works
+        if 'imgur' in url and url.endswith("gifv"):
+            # imgur will give us a (however large) gif if we ask for it
+            # thanks imgur <3
+            url = url.rstrip('v')
+        # Reddit Hosted gifs are going to be absolute hell, served via DASH which
+        #       Can be checked through a fallback url :)
+        try:
+            response = requests.get(url)
+        # The nature of this throws tons of exceptions based on what users throw at the bot
+        except Exception as error:
+            print(error)
+            print('Exception on image conversion lines.')
+            return None
+
+        img = Image.open(BytesIO(response.content))
+        frames = []
+
+        # Process Gif
+
+        # Loop over each frame in the animated image
+        for frame in ImageSequence.Iterator(img):
+            # Draw the text on the frame
+
+            # We'll create a custom RedditImage for each frame to avoid
+            #      redundant code
+
+            # TODO: Consolidate this entire method into RedditImage. I want to make
+            #       Sure this works before I integrate.
+
+            r_frame = RedditImage(frame)
+            r_frame.add_title(title, False)
+
+            frame = r_frame.image
+            # However, 'frame' is still the animated image with many frames
+            # It has simply been seeked to a later frame
+            # For our list of frames, we only want the current frame
+
+            # Saving the image without 'save_all' will turn it into a single frame image, and we can then re-open it
+            # To be efficient, we will save it to a stream, rather than to file
+            b = BytesIO()
+            frame.save(b, format="GIF")
+            frame = Image.open(b)
+
+            # The first successful image generation was 150MB, so lets see what all
+            #       Can be done to not have that happen
+
+            # Then append the single frame image to a list of frames
+            frames.append(frame)
+        # Save the frames as a new image
+        path_gif = 'temp.gif'
+        # path_mp4 = 'temp.mp4'
+        frames[0].save(path_gif, save_all=True, append_images=frames[1:])
+        # ff = ffmpy.FFmpeg(inputs={path_gif: None},outputs={path_mp4: None})
+        # ff.run()
+
+        # noinspection PyBroadException
+        try:
+            url = self.upload_to_gfycat(path_gif).url
+            remove(path_gif)
+        except Exception as ex:
+            logging.error('Gif Upload Failed with %s, Returning' % ex)
+            remove(path_gif)
+            return None
+        # remove(path_mp4)
+        return url
+
+    def upload(self, reddit_image):
+        """Upload self._image to imgur
+
+        :type reddit_image: RedditImage
+        :param reddit_image:
+        :returns: imgur url if upload successful, else None
+        :rtype: str, NoneType
+        """
+        path_png = 'temp.png'
+        path_jpg = 'temp.jpg'
+        reddit_image.image.save(path_png)
+        reddit_image.image.save(path_jpg)
+        # noinspection PyBroadException
+        try:
+            response = self.upload_to_imgur(path_png)
+        except Exception as ex:
+            # Likely too large
+            logging.warning('png upload failed with %s, trying jpg' % ex)
+            try:
+                response = self.upload_to_imgur(path_jpg)
+            except Exception as ex:
+                logging.error('jpg upload failed with %s, returning' % ex)
+                return None
+        finally:
+            remove(path_png)
+            remove(path_jpg)
+        return response.link
+
+    def upload_to_imgur(self, local_image_url):
+        response = self.imgur.upload_image(local_image_url, title="Uploaded by /u/Title2ImageBot")
+        return response
+
+    def upload_to_gfycat(self, local_gif_url):
+        generated_gfycat = self.gfycat.upload_file(local_gif_url)
+        return generated_gfycat
+
     def run(self, limit):
         logging.info('Checking Mentions')
         self.check_mentions_for_requests(limit)
         logging.info('Checking Autoreply Subs')
         self.check_subs_for_posts(limit)
-
-
 
 
 class RedditImage:
@@ -206,13 +434,13 @@ class RedditImage:
     min_size = 500
     # TODO find a font for all unicode chars & emojis
     # font_file = 'seguiemj.ttf'
-    font_file = 'roboto-emoji.ttf'
+    font_file = 'NotoSans-Regular.ttf'
     font_scale_factor = 16
     # Regex to remove resolution tag styled as such: '[1000 x 1000]'
     regex_resolution = re.compile(r'\s?\[[0-9]+\s?[xX*×]\s?[0-9]+\]')
 
     def __init__(self, image):
-        self._image = image
+        self.image = image
         self.upscaled = False
         width, height = image.size
         # upscale small images
@@ -221,11 +449,11 @@ class RedditImage:
                 factor = self.min_size / width
             else:
                 factor = self.min_size / height
-            self._image = self._image.resize((ceil(width * factor),
-                                              ceil(height * factor)),
-                                             Image.LANCZOS)
+            self.image = self.image.resize((ceil(width * factor),
+                                            ceil(height * factor)),
+                                           Image.LANCZOS)
             self.upscaled = True
-        self._width, self._height = self._image.size
+        self._width, self._height = self.image.size
         self._font_title = ImageFont.truetype(
             self.font_file,
             self._width // self.font_scale_factor
@@ -286,6 +514,8 @@ class RedditImage:
     def add_title(self, title, boot, bg_color='#fff', text_color='#000'):
         """Add title to new whitespace on image
 
+        :param text_color:
+        :param bg_color:
         :param title: the title to add
         :type title: str
         :param boot: if True, split title on [',', ';', '.'], else wrap text
@@ -298,257 +528,167 @@ class RedditImage:
         lines = self._split_title(title) if boot else self._wrap_title(title)
         whitespace_height = (line_height * len(lines)) + RedditImage.margin
         new = Image.new('RGB', (self._width, self._height + whitespace_height), bg_color)
-        new.paste(self._image, (0, whitespace_height))
+        new.paste(self.image, (0, whitespace_height))
         draw = ImageDraw.Draw(new)
         for i, line in enumerate(lines):
-            w,h = self._font_title.getsize(line)
-            left_margin = ((self._width - w)/2) if beta_centering else RedditImage.margin
+            w, h = self._font_title.getsize(line)
+            left_margin = ((self._width - w) / 2) if beta_centering else RedditImage.margin
             draw.text((left_margin, i * line_height + RedditImage.margin),
                       line, text_color, self._font_title)
         self._width, self._height = new.size
-        self._image = new
+        self.image = new
 
-    def upload(self, imgur):
-        """Upload self._image to imgur
 
-        :param imgur: the imgur api client
-        :type imgur: imgurpython.client.ImgurClient
-        :param config: imgur image config
-        :type config: dict
-        :returns: imgur url if upload successful, else None
-        :rtype: str, NoneType
+class Configuration(object):
+
+    def __init__(self, config_file):
+        self._config = configparser.ConfigParser()
+        self._config.read(config_file)
+        self.configfile = self._config
+
+    def get_automatic_processing_subs(self):
+        sections = self._config.sections()
+
+        config_internal_sections = ["RedditAuth", "GfyCatAuth", "ImgurAuth", "IgnoreList"]
+
+        for i in sections:
+            if i in config_internal_sections:
+                sections.remove(i)
+        # TODO: fix this
+        sections.remove("IgnoreList")
+        sections.remove("ImgurAuth")
+        return sections
+
+    def get_user_ignore_list(self):
+        ignorelist = []
+        for i in self._config.items("IgnoreList"):
+            ignorelist.append(i[0])
+        return ignorelist
+
+    def get_gfycat_client_config(self):
+        client_id = self._config['GfyCatAuth']['publicKey']
+        client_secret = self._config['GfyCatAuth']['privateKey']
+        username = self._config['GfyCatAuth']['username']
+        password = self._config['GfyCatAuth']['password']
+        client = gfycat.GfyCatClient(client_id, client_secret, username, password)
+        return client
+
+    def auth_reddit_from_config(self):
+        return (praw.Reddit(client_id=self._config['RedditAuth']['publicKey'],
+                            client_secret=self._config['RedditAuth']['privateKey'],
+                            username=self._config['RedditAuth']['username'],
+                            password=self._config['RedditAuth']['password'],
+                            user_agent=self._config['RedditAuth']['userAgent']))
+
+    def get_imgur_client_config(self):
+        return pyimgur.Imgur(self._config['ImgurAuth']['publicKey'])
+
+
+class BotDatabase(object):
+    def __init__(self, db_filename):
+        self._sql_conn = sqlite3.connect(db_filename)
+        self._sql = self._sql_conn.cursor()
+
+    def message_exists(self, message_id):
+        """Check if message exists in messages table
+
+        :param message_id: the message id to check
+        :type message_id: str
+        :returns: True if message was found, else False
+        :rtype: bool
         """
-        path_png = 'temp.png'
-        path_jpg = 'temp.jpg'
-        self._image.save(path_png)
-        self._image.save(path_jpg)
-        try:
-            response = imgur.upload_image(path_png, title="Uploaded by /u/Title2ImageBot")
-        except:
-            # Likely too large
-            logging.warning('png upload failed, trying jpg')
-            try:
-                response = imgur.upload_image(path_jpg, title="Uploaded by /u/Title2ImageBot")
-            except:
-                logging.error('jpg upload failed, returning')
-                return None
-        finally:
-            remove(path_png)
-            remove(path_jpg)
-        return response.link
+        self._sql.execute('SELECT EXISTS(SELECT 1 FROM messages WHERE id=?)', (message_id,))
+        if self._sql.fetchone()[0]:
+            return True
+        else:
+            return False
 
-# -- UTILS --
+    def submission_exists(self, message_id):
+        self._sql.execute('SELECT EXISTS(SELECT 1 FROM submissions WHERE id=?)', (message_id,))
+        if self._sql.fetchone()[0]:
+            return True
+        else:
+            return False
 
-def check_config_for_sub_threshold(sub, config_file="config.ini"):
-    config = configparser.ConfigParser()
-    config.read(config_file)
-    if config.has_option(sub, 'threshold'):
-        return int(config[sub]['threshold'])
-    else:
-        return -1
+    def message_parsed(self, message_id):
+        # TODO: Fix the implementation of this
+        self._sql.execute('SELECT EXISTS(SELECT 1 FROM messages WHERE id=? AND parsed=1)', (message_id,))
+        if self._sql.fetchone()[0]:
+            return True
+        else:
+            return False
 
-def get_automatic_processing_subs(config_file="config.ini"):
-    config = configparser.ConfigParser()
-    config.read(config_file)
-    sections = config.sections()
-    sections.remove('RedditAuth')
-    sections.remove('ImgurAuth')
-    sections.remove('GfyCatAuth')
-    return sections
+    def message_insert(self, message_id, message_author, subject, body):
+        """Insert message into messages table"""
+        self._sql.execute('INSERT INTO messages (id, author, subject, body) VALUES (?, ?, ?, ?)',
+                          (message_id, message_author, subject, body))
+        self._sql_conn.commit()
 
-
-def process_image_submission(submission, commenter=None, customargs=None):
-    # TODO implement user selectable options on summons
-
-    # Make sure author account exists
-    if not submission.author:
-        add_parsed(submission.id)
-        return None;
-
-    sub = submission.subreddit.display_name
-    url = submission.url
-    title = submission.title
-    author = submission.author.name
-
-    # We need to verify everything is good to go
-    # Check every item in this list and verify it is 'True'
-    # If the submission has been parsed, throw false which will not allow the Bot
-    #   To post.
-    not_parsed = not check_if_parsed(submission.id)
-    # TODO add gif support
-
-    checks = [not_parsed]
-
-    if not all(checks):
-        print("Checks failed, not submitting")
-        return;
-
-
-    if  url.endswith('.gif') or url.endswith('.gifv'):
-        # Lets try this again.
-        try:
-            return process_gif(submission)
-        except:
-            logging.warn("gif upload failed")
+    def submission_select(self, submission_id):
+        """Select all attributes of submission
+        :param submission_id: the submission id
+        :type submission_id: str
+        :returns: query result, None if id not found
+        :rtype: dict, NoneType
+        """
+        self._sql.execute('SELECT * FROM submissions WHERE id=?', (submission_id,))
+        result = self._sql.fetchone()
+        if not result:
             return None
-    # Attempt to grab the images
-    try:
-        response = requests.get(url)
-        img = Image.open(BytesIO(response.content))
-    except OSError as error:
-        logging.warning('Converting to image failed, trying with <url>.jpg | %s', error)
-        try:
-            response = requests.get(url + '.jpg')
-            img = Image.open(BytesIO(response.content))
-        except OSError as error:
-            logging.error('Converting to image failed, skipping submission | %s', error)
-            return
-    except IOError as error:
-        print('Pillow couldn\'t process image, marking as parsed and skipping')
-        return None;
-    except Exception as error:
-        print(error)
-        print('Exception on image conversion lines.')
-        return None;
-    try:
-        image = RedditImage(img)
-    except Exception as error:
-        # TODO add error in debug line
-        print('Could not create RedditImage with error')
-        return None;
-    image.add_title(title, False)
+        return {
+            'id': result[0],
+            'author': result[1],
+            'title': result[2],
+            'url': result[3],
+            'imgur_url': result[4],
+            'retry': result[5],
+            'timestamp': result[6]
+        }
 
-    imgur = get_imgur_client_config()
-    imgur_url = image.upload(imgur)
+    def submission_insert(self, submission_id, submission_author, title, url):
+        """Insert submission into submissions table"""
+        self._sql.execute('INSERT INTO submissions (id, author, title, url) VALUES (?, ?, ?, ?)',
+                          (submission_id, submission_author, title, url))
+        self._sql_conn.commit()
 
-    return imgur_url
+    def submission_set_retry(self, submission_id, delete_message=False, message=None):
+        """Set retry flag for given submission, delete message from db if desired
+        :param submission_id: the submission id to set retry
+        :type submission_id: str
+        :param delete_message: if True, delete message from messages table
+        :type delete_message: bool
+        :param message: the message to delete
+        :type message: praw.models.Comment, NoneType
+        """
+        self._sql.execute('UPDATE submissions SET retry=1 WHERE id=?', (submission_id,))
+        if delete_message:
+            if not message:
+                raise TypeError('If delete_message is True, message must be set')
+            self._sql.execute('DELETE FROM messages WHERE id=?', (message.id,))
+        self._sql_conn.commit()
 
-def process_gif(submission):
-    sub = submission.subreddit.display_name
-    url = submission.url
-    title = submission.title
-    author = submission.author.name
- 
-    # If its a gifv and hosted on imgur, we're ok, anywhere else I cant verify it works
-    if 'imgur' in url and url.endswith("gifv"):
-        # imgur will give us a (however large) gif if we ask for it
-        # thanks imgur <3
-        url = url.rstrip('v')
-    # Reddit Hosted gifs are going to be absolute hell, served via DASH which
-    #       Can be checked through a fallback url :)
-    try:
-        response = requests.get(url)
-    # Try to get an image if someone linked to imgur but didn't put the .file ext.
-    except OSError as error:
-        logging.warning('Converting to image failed, trying with <url>.jpg | %s', error)
-        try:
-            response = requests.get(url + '.jpg')
-            img = Image.open(BytesIO(response.content))
-        # If that wasn't the case
-        except OSError as error:
-            logging.error('Converting to image failed, skipping submission | %s', error)
-            return
-    # Lord knows
-    except IOError as error:
-        print('Pillow couldn\'t process image, marking as parsed and skipping')
-        return None;
-    # The nature of this throws tons of exceptions based on what users throw at the bot
-    except Exception as error:
-        print(error)
-        print('Exception on image conversion lines.')
-        return None;
-    except:
-        logging.error("Could not get image from url")
-        return None;
- 
-    img = Image.open(BytesIO(response.content))
-    frames = []
- 
-    # Process Gif
- 
-    # Loop over each frame in the animated image
-    for frame in ImageSequence.Iterator(img):
-        # Draw the text on the frame
- 
-        # We'll create a custom RedditImage for each frame to avoid
-        #      redundant code
- 
-        # TODO: Consolidate this entire method into RedditImage. I want to make
-        #       Sure this works before I integrate.
- 
-        rFrame = RedditImage(frame)
-        rFrame.add_title(title, False)
- 
-        frame = rFrame._image
-        # However, 'frame' is still the animated image with many frames
-        # It has simply been seeked to a later frame
-        # For our list of frames, we only want the current frame
- 
-        # Saving the image without 'save_all' will turn it into a single frame image, and we can then re-open it
-        # To be efficient, we will save it to a stream, rather than to file
-        b = BytesIO()
-        frame.save(b, format="GIF")
-        frame = Image.open(b)
- 
-        # The first successful image generation was 150MB, so lets see what all
-        #       Can be done to not have that happen
- 
-        # Then append the single frame image to a list of frames
-        frames.append(frame)
-    # Save the frames as a new image
-    path_gif = 'temp.gif'
-    path_mp4 = 'temp.mp4'
-    frames[0].save(path_gif, save_all=True, append_images=frames[1:])
-    # ff = ffmpy.FFmpeg(inputs={path_gif: None},outputs={path_mp4: None})
-    # ff.run()
- 
-    try:
-        url = get_gfycat_client_config().upload_file(path_gif).url
-        remove(path_gif)
-    except:
-        logging.error('Gif Upload Failed, Returning')
-        remove(path_gif)
-        return None
-    # remove(path_mp4)
-    return url
+    def submission_clear_retry(self, submission_id):
+        """Clear retry flag for given submission_id
+        :param submission_id: the submission id to clear retry
+        :type submission_id: str
+        """
+        self._sql.execute('UPDATE submissions SET retry=0 WHERE id=?', (submission_id,))
+        self._sql_conn.commit()
 
-def get_gfycat_client_config(config_file="config.ini"):
-    config = configparser.ConfigParser()
-    config.read(config_file)
-    client_id = config['GfyCatAuth']['publicKey']
-    client_secret = config['GfyCatAuth']['privateKey']
-    username = config['GfyCatAuth']['username']
-    password = config['GfyCatAuth']['password']
-    client = gfycat.GfyCatClient(client_id,client_secret,username,password)
-    return client
-
-def auth_reddit_from_config(config_file='config.ini'):
-    config = configparser.ConfigParser()
-    config.read(config_file)
-    return(praw.Reddit(client_id=config['RedditAuth']['publicKey'],
-        client_secret=config['RedditAuth']['privateKey'],
-        username=config['RedditAuth']['username'],
-        password=config['RedditAuth']['password'],
-        user_agent=config['RedditAuth']['userAgent']))
-
-
-reddit = auth_reddit_from_config()
-
-def get_imgur_client_config(config_file="config.ini"):
-    config = configparser.ConfigParser()
-    config.read(config_file)
-    return(pyimgur.Imgur(config['ImgurAuth']['publicKey']))
+    def submission_set_imgur_url(self, submission_id, imgur_url):
+        """Set imgur url for given submission
+        :param submission_id: the submission id to set imgur url
+        :type submission_id: str
+        :param imgur_url: the imgur url to update
+        :type imgur_url: str
+        """
+        self._sql.execute('UPDATE submissions SET imgur_url=? WHERE id=?',
+                          (imgur_url, submission_id))
+        self._sql_conn.commit()
 
 
 comment_file_path = "parsed.txt"
 
-def add_parsed(id):
-    with open(comment_file_path, 'a+') as f:
-        f.write(id)
-
-def check_if_parsed(id):
-    with open(comment_file_path,'r+') as f:
-        return id in f.read();
 
 def main():
     parser = argparse.ArgumentParser(description='Bot To Add Titles To Images')
@@ -560,14 +700,18 @@ def main():
 
     args = parser.parse_args()
     if args.debug:
-        logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.DEBUG);
+        logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.DEBUG)
     else:
-        logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.INFO);
+        logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.INFO)
 
-    # logging.info('Bot initialized, processing the last %s submissions/messages every %s seconds' % (args.limit, args.interval))
-    bot = TitleToImageBot()
-    
-    
+    configuration = Configuration("config.ini")
+    database = BotDatabase("t2ib.sqlite")
+
+    logging.info('Bot initialized, processing the last %s submissions/messages every %s seconds' % (args.limit,
+                                                                                                    args.interval))
+
+    bot = TitleToImageBot(configuration, database)
+
     logging.debug('Debug Enabled')
     if not args.loop:
         bot.run(args.limit)
@@ -577,7 +721,6 @@ def main():
         bot.run(args.limit)
         logging.info('Checking Complete')
         time.sleep(args.interval)
-
 
 
 if __name__ == '__main__':
