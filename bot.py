@@ -14,6 +14,7 @@ import configparser
 import logging
 import re
 import sqlite3
+import sys
 import time
 from io import BytesIO
 from math import ceil
@@ -24,38 +25,76 @@ import praw.exceptions
 import praw.models
 import pyimgur
 import requests
-from PIL import Image, ImageDraw, ImageFont, ImageSequence
+from PIL import Image, ImageSequence, ImageFont, ImageDraw
 from gfypy import gfycat
 
 import messages
 
 __author__ = 'calicocatalyst'
-__version__ = '0.3b'
+__version__ = '0.4.0b'
 
 
 class TitleToImageBot(object):
     def __init__(self, config, database):
         """
+        Set our API variables for us to access
 
-        :type database: BotDatabase
+        :param config: Configuration Object that stores a lot of variable info on how the bot runs
         :type config: Configuration
+        :param database: Database that has parsed objects.
+        :type database: BotDatabase
         """
+        # The conifugration has all of the usernames/passwords/keys.
         self.config = config
+
+        # Ask for our API objects from the config
         self.reddit = self.config.auth_reddit_from_config()
         self.imgur = self.config.get_imgur_client_config()
         self.gfycat = self.config.get_gfycat_client_config()
 
         self.database = database
 
-    def check_mentions_for_requests(self, postlimit=10):
-        for message in self.reddit.inbox.all(limit=postlimit):
+    def check_mentions_for_requests(self, post_limit=10):
+        """
+        Check our inbox for any activity with PRAW and send it all to process_message to figure out what it is
+
+        :param post_limit: How far back should we go?
+        :type post_limit: int
+        """
+        # This is for the progress bar
+        iteration = 1
+        # Start the progress bar before we make the request.
+        print_progress(iteration, post_limit)
+        for message in self.reddit.inbox.all(limit=post_limit):
+            # If we're on the first one, show the progress bar not moving so we dont go over 100%
+            if iteration is 1:
+                iteration = iteration + 1
+                print_progress(1, post_limit + 1)
+            else:
+                iteration = iteration + 1
+                print_progress(iteration, post_limit + 1)
+
             self.process_message(message)
 
-    def check_subs_for_posts(self, postlimit=25):
+    def check_subs_for_posts(self, post_limit=25):
+        """
+        Check the subs listed in the config and send them to process_message
+        Additionally, make sure any special post requirements listed in the config for the auto-subs are satisfied
+
+        :param post_limit: How far back should we go?
+        :type post_limit: int
+        """
         subs = self.config.get_automatic_processing_subs()
+
+        # Caluclate the total amount of posts to be parsed
+        totalits = len(subs) * post_limit
+        iters = 0
         for sub in subs:
             subr = self.reddit.subreddit(sub)
-            for post in subr.new(limit=postlimit):
+            for post in subr.new(limit=post_limit):
+                iters += 1
+                print_progress(iters, totalits)
+
                 if self.database.submission_exists(post.id):
                     continue
                 title = post.title
@@ -88,70 +127,6 @@ class TitleToImageBot(object):
                 else:
                     self.database.submission_insert(post.id, post.author.name, title, post.url)
 
-    def reply_imgur_url(self, url, submission, source_comment, upscaled=False):
-        """
-        :param upscaled:
-        :param url: Imgur Url
-        :type url: str
-        :param submission: Submission that the post was on. Reply if source_comment = False
-        :type submission: praw.models.Submission
-        :param source_comment: Comment that invoked bot if it exists
-        :type source_comment: praw.models.Comment
-        :returns: True on success, False on failure
-        :rtype: bool
-        """
-        if url is None:
-
-            logging.info('URL returned as none.')
-            logging.debug('Checking if Bot Has Already Processed Submission')
-            # This should return if the bot has already replied.
-            # So, lets check if the bot has already been here and reply with that instead!
-            for comment in submission.comments.list():
-                if isinstance(comment, praw.models.MoreComments):
-                    # See praw docs on MoreComments
-                    continue
-                if not comment or comment.author is None:
-                    # If the comment or comment author was deleted, skip it
-                    continue
-                if comment.author.name == self.reddit.user.me().name and 'Image with added title' in comment.body:
-                    if source_comment:
-                        self.responded_already_reply(source_comment, comment, submission)
-
-            if self.database.message_exists(source_comment.id):
-                return
-            else:
-                self.database.message_insert(source_comment.id, source_comment.author.name, "comment reply",
-                                             source_comment.body)
-            # Bot is being difficult and replying multiple times so lets try this :)
-            return
-        logging.info('Creating reply')
-        reply = messages.standard_reply_template.format(
-            image_url=url,
-            nsfw="(NSFW)" if submission.over_18 else '',
-            upscaled=' (image was upscaled)\n\n' if upscaled else '',
-            submission_id=submission.id
-        )
-        try:
-            if source_comment:
-                source_comment.reply(reply)
-            else:
-                submission.reply(reply)
-        except praw.exceptions.APIException as error:
-            logging.error('Reddit api error, we\'ll try to repost later | %s', error)
-            return False
-        except Exception as error:
-            logging.error('Cannot reply, skipping submission | %s', error)
-            return False
-        self.database.submission_insert(submission.id, submission.author.name, submission.title, url)
-        return True
-
-    def responded_already_reply(self, source_comment, comment, submission):
-        com_url = messages.comment_url.format(postid=submission.id, commentid=comment.id)
-        reply = messages.already_responded_message.format(commentlink=com_url)
-
-        source_comment.reply(reply)
-        self.database.message_insert(source_comment.id, comment.author.name, "comment reply", source_comment.body)
-
     def process_submission(self, submission, source_comment, title):
         """
         Process Submission Using t2utils given the above args, and use the other
@@ -161,37 +136,76 @@ class TitleToImageBot(object):
         :type submission: praw.models.submission
         :param source_comment: Comment that invoked if any did, may be NoneType
         :type source_comment: praw.models.Comment, None
-        :param title: Custom title if any (Currently it will always be None)
-        :type title: String
+        :param title: Custom title if any
+        :type title: String, None
         """
-        _ = title
-        url = self.process_image_submission(submission)
-        self.reply_imgur_url(url, submission, source_comment)
+
+        url = self.process_image_submission(submission, title)
+
+        if url is None:
+
+            logging.info('URL returned as none.')
+            logging.debug('Checking if Bot Has Already Processed Submission')
+            # This should return if the bot has already replied.
+            for comment in submission.comments.list():
+                if isinstance(comment, praw.models.MoreComments):
+                    # See praw docs on MoreComments
+                    continue
+                if not comment or comment.author is None:
+                    # If the comment or comment author was deleted, skip it
+                    continue
+                if comment.author.name == self.reddit.user.me().name and 'Image with added title' in comment.body:
+                    if source_comment:
+                        self.redirect_to_comment(source_comment, comment, submission)
+
+            # If there is no comment (automatic sub parsing) and the post wasn't deleted, and its not in the table, put
+            #   it in. This was a very specific issue and I'm not sure what the exact problem was, but this fixes it
+            if (source_comment is None and
+                    submission is not None and
+                    not self.database.submission_exists(submission.id)):
+                self.database.submission_insert(submission.id, submission.author.name, submission.title,
+                                                submission.url)
+                return
+            if self.database.message_exists(source_comment.id):
+                return
+            else:
+                self.database.message_insert(source_comment.id, source_comment.author.name, "comment reply",
+                                             source_comment.body)
+                return
+
+        custom_title_exists = True if title is not None else False
+        self.reply_imgur_url(url, submission, source_comment, custom_title=custom_title_exists)
 
     def process_message(self, message):
-        """Process given message (remove, feedback, mark good/bad bot as read)
+        """
+        Process given message (remove, feedback, mark good/bad bot as read)
     
         :param message: the inbox message, comment reply or username mention
         :type message: praw.models.Message, praw.models.Comment
         """
         if not message.author:
             return
+
         message_author = message.author.name
         subject = message.subject.lower()
-        # body_original = message.body
+        body_original = message.body
         body = message.body.lower()
+
         if self.database.message_exists(message.id):
             logging.debug("bot.process_message() Message %s Already Parsed, Returning", message.id)
             return
+
         if message_author.lower() == "the-paranoid-android":
             message.reply("Thanks Marv")
             logging.info("Thanking marv")
             self.database.message_insert(message.id, message_author, message.subject.lower(), body)
             return
+
         # Skip Messages Sent by Bot
         if message_author == self.reddit.user.me().name:
             logging.debug('Message was sent, returning')
             return
+
         # process message
         if (isinstance(message, praw.models.Comment) and
                 (subject == 'username mention' or
@@ -201,7 +215,8 @@ class TitleToImageBot(object):
                 message.mark_read()
                 return
 
-            match = None
+            match = re.match(r'.*u/title2imagebot\s*["“”](.+)["“”].*',
+                             body_original, re.RegexFlag.IGNORECASE)
             title = None
             if match:
                 title = match.group(1)
@@ -231,40 +246,43 @@ class TitleToImageBot(object):
             self.database.message_insert(message.id, message_author, subject, body)
 
     # noinspection PyUnusedLocal
-    def process_image_submission(self, submission, commenter=None, customargs=None):
+    def process_image_submission(self, submission, custom_title=None, commenter=None, customargs=None):
         """
+        Process a submission that we know is a request for processing
 
+        :param custom_title: Custom Title to parse
+        :type custom_title: str
         :param submission: Submission that points to a URL we need to process
         :type submission: praw.models.Submission
         :param commenter: Commenter who requested the thing
         :type commenter: praw.models.Redditor
         :param customargs: List of custom arguments. Not implemented, but lets be ready for it once we figure out how
-        :type customargs: List
+        :type customargs: list
         :return: URL the image has been uploaded to, None if it failed to upload
         :rtype: String, None
         """
-        # TODO implement user selectable options on summons
 
         # Make sure author account exists
-        if not submission.author:
-            self.database.submission_insert(submission.id, submission.author.name, submission.title, submission.url)
+        if submission.author is None:
+            self.database.submission_insert(submission.id, "deletedPost", submission.title, submission.url)
             return None
 
         sub = submission.subreddit.display_name
         url = submission.url
-        title = submission.title
+        if custom_title is not None:
+            title = custom_title
+        else:
+            title = submission.title
         submission_author = submission.author.name
 
         # We need to verify everything is good to go
         # Check every item in this list and verify it is 'True'
         # If the submission has been parsed, throw false which will not allow the Bot
         #   To post.
-        not_parsed = not self.database.submission_exists(submission.id)
+        parsed = self.database.submission_exists(submission.id)
 
-        checks = [not_parsed]
-
-        if not all(checks):
-            print("Checks failed, not submitting")
+        if parsed:
+            print("Image already parsed, not submitting")
             return None
 
         if url.endswith('.gif') or url.endswith('.gifv'):
@@ -275,6 +293,7 @@ class TitleToImageBot(object):
             except Exception as ex:
                 logging.warning("gif upload failed with %s" % ex)
                 return None
+
         # Attempt to grab the images
         try:
             response = requests.get(url)
@@ -341,9 +360,6 @@ class TitleToImageBot(object):
             # We'll create a custom RedditImage for each frame to avoid
             #      redundant code
 
-            # TODO: Consolidate this entire method into RedditImage. I want to make
-            #       Sure this works before I integrate.
-
             r_frame = RedditImage(frame)
             r_frame.add_title(title, False)
 
@@ -382,7 +398,8 @@ class TitleToImageBot(object):
         return url
 
     def upload(self, reddit_image):
-        """Upload self._image to imgur
+        """
+        Upload self._image to imgur
 
         :type reddit_image: RedditImage
         :param reddit_image:
@@ -410,12 +427,82 @@ class TitleToImageBot(object):
         return response.link
 
     def upload_to_imgur(self, local_image_url):
+        """
+
+        :param local_image_url: local url of the image. Usually temp.jpg or temp.png
+        :type local_image_url: str
+        :return: Uploaded image object
+        :rtype: pyimgur.Image
+        """
         response = self.imgur.upload_image(local_image_url, title="Uploaded by /u/Title2ImageBot")
         return response
 
     def upload_to_gfycat(self, local_gif_url):
         generated_gfycat = self.gfycat.upload_file(local_gif_url)
         return generated_gfycat
+
+    def reply_imgur_url(self, url, submission, source_comment, custom_title=False, upscaled=False):
+        """
+        Send the reply with PRAW to the user who requested, or the submission if its auto
+
+        :type custom_title: object
+        :param custom_title:
+        :param upscaled: If the image is below 500x500px it gets upscaled,
+        :type upscaled: bool
+        :param url: Imgur Url the titled image was uploaded to
+        :type url: str
+        :param submission: Submission that the post was on. Reply if source_comment = False
+        :type submission: praw.models.Submission
+        :param source_comment: Comment that invoked bot if it exists
+        :type source_comment: praw.models.Comment
+        :returns: True on success, False on failure
+        :rtype: bool
+        """
+
+        logging.info('Creating reply')
+        if submission.subreddit in self.config.get_minimal_sub_list():
+            reply = messages.minimal_reply_template(
+                image_url=url,
+                nsfw="(NSFW)"
+            )
+        else:
+            reply = messages.standard_reply_template.format(
+                image_url=url,
+                custom="custom " if custom_title else "",
+                nsfw="(NSFW)" if submission.over_18 else '',
+                upscaled=' (image was upscaled)\n\n' if upscaled else '',
+                submission_id=submission.id
+            )
+        try:
+            if source_comment:
+                source_comment.reply(reply)
+            else:
+                submission.reply(reply)
+        except praw.exceptions.APIException as error:
+            logging.error('Reddit api error, we\'ll try to repost later | %s', error)
+            return False
+        except Exception as error:
+            logging.error('Cannot reply, skipping submission | %s', error)
+            return False
+        self.database.submission_insert(submission.id, submission.author.name, submission.title, url)
+        return True
+
+    def redirect_to_comment(self, source_comment, comment, submission):
+        """
+        Reply to `source_comment` with a link to `comment`
+
+        :type source_comment: praw.models.Comment
+        :param source_comment: Comment we're replying to
+        :type comment: praw.models.Comment
+        :param comment: Our comment that we're going to redirect them to
+        :param submission: The submission that its under (needed to link to the comment)
+        :type submission: praw.models.Submission
+        """
+        com_url = messages.comment_url.format(postid=submission.id, commentid=comment.id)
+        reply = messages.already_responded_message.format(commentlink=com_url)
+
+        source_comment.reply(reply)
+        self.database.message_insert(source_comment.id, comment.author.name, "comment reply", source_comment.body)
 
     def run(self, limit):
         logging.info('Checking Mentions')
@@ -432,9 +519,9 @@ class RedditImage:
     """
     margin = 10
     min_size = 500
-    # TODO find a font for all unicode chars & emojis
+    # TODO Figure out support for other languages
     # font_file = 'seguiemj.ttf'
-    font_file = 'NotoSans-Regular.ttf'
+    font_file = 'roboto-emoji.ttf'
     font_scale_factor = 16
     # Regex to remove resolution tag styled as such: '[1000 x 1000]'
     regex_resolution = re.compile(r'\s?\[[0-9]+\s?[xX*×]\s?[0-9]+\]')
@@ -548,22 +635,24 @@ class Configuration(object):
 
     def get_automatic_processing_subs(self):
         sections = self._config.sections()
-
-        config_internal_sections = ["RedditAuth", "GfyCatAuth", "ImgurAuth", "IgnoreList"]
-
-        for i in sections:
-            if i in config_internal_sections:
-                sections.remove(i)
-        # TODO: fix this
+        sections.remove("RedditAuth")
+        sections.remove("GfyCatAuth")
         sections.remove("IgnoreList")
+        sections.remove("MinimalList")
         sections.remove("ImgurAuth")
         return sections
 
     def get_user_ignore_list(self):
-        ignorelist = []
+        ignore_list = []
         for i in self._config.items("IgnoreList"):
-            ignorelist.append(i[0])
-        return ignorelist
+            ignore_list.append(i[0])
+        return ignore_list
+
+    def get_minimal_sub_list(self):
+        minimal_list = []
+        for i in self._config.items("MinimalList"):
+            minimal_list.append(i[0])
+        return minimal_list
 
     def get_gfycat_client_config(self):
         client_id = self._config['GfyCatAuth']['publicKey']
@@ -585,9 +674,14 @@ class Configuration(object):
 
 
 class BotDatabase(object):
+
     def __init__(self, db_filename):
         self._sql_conn = sqlite3.connect(db_filename)
         self._sql = self._sql_conn.cursor()
+
+    def cleanup(self):
+        self._sql_conn.commit()
+        self._sql_conn.close()
 
     def message_exists(self, message_id):
         """Check if message exists in messages table
@@ -687,7 +781,27 @@ class BotDatabase(object):
         self._sql_conn.commit()
 
 
-comment_file_path = "parsed.txt"
+def print_progress(iteration, total, prefix='', suffix='', decimals=1, bar_length=25):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        bar_length  - Optional  : character length of bar (Int)
+    """
+    str_format = "{0:." + str(decimals) + "f}"
+    percents = str_format.format(100 * (iteration / float(total)))
+    filled_length = int(round(bar_length * iteration / float(total)))
+    bar = '+' * filled_length + '-' * (bar_length - filled_length)
+
+    sys.stdout.write('\r%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix)),
+
+    if iteration == total:
+        sys.stdout.write('\n')
+    sys.stdout.flush()
 
 
 def main():
@@ -713,14 +827,21 @@ def main():
     bot = TitleToImageBot(configuration, database)
 
     logging.debug('Debug Enabled')
-    if not args.loop:
-        bot.run(args.limit)
-        logging.info('Checking Complete, Exiting Program')
+
+    try:
+        if not args.loop:
+            bot.run(args.limit)
+            logging.info('Checking Complete, Exiting Program')
+            exit(0)
+        while True:
+            bot.run(args.limit)
+            logging.info('Checking Complete')
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        logging.debug("KeyboardInterrupt Detected, Cleaning up and exiting...")
+        print("Cleaning up and exiting...")
+        database.cleanup()
         exit(0)
-    while True:
-        bot.run(args.limit)
-        logging.info('Checking Complete')
-        time.sleep(args.interval)
 
 
 if __name__ == '__main__':
