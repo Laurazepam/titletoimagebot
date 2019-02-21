@@ -9,7 +9,7 @@ Depends:
 > Praw    
 > Pillow  
 > PyImgur  
-> GfyPy
+> GfyPy   
 > ImgurPython  
 > argparse  
 
