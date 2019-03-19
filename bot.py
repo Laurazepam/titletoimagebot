@@ -3,7 +3,7 @@
 
 """
 Title2ImageBot
-Complete redesign of titletoimagebot by gerenook with non-deprecated apis
+Complete redesign of titletoimagebot with non-deprecated apis
 
 This file contains the main methods, and the methods to handle post processing
 Image Processing / Imgur Uploading is done in t2utils
@@ -23,6 +23,7 @@ from os import remove
 import praw
 import praw.exceptions
 import praw.models
+import prawcore
 import pyimgur
 import requests
 from PIL import Image, ImageSequence, ImageFont, ImageDraw
@@ -31,7 +32,7 @@ from gfypy import gfycat
 import messages
 
 __author__ = 'calicocatalyst'
-__version__ = '0.4.0b'
+__version__ = '0.4.1b'
 
 
 class TitleToImageBot(object):
@@ -179,7 +180,7 @@ class TitleToImageBot(object):
     def process_message(self, message):
         """
         Process given message (remove, feedback, mark good/bad bot as read)
-    
+
         :param message: the inbox message, comment reply or username mention
         :type message: praw.models.Message, praw.models.Comment
         """
@@ -501,7 +502,13 @@ class TitleToImageBot(object):
         com_url = messages.comment_url.format(postid=submission.id, commentid=comment.id)
         reply = messages.already_responded_message.format(commentlink=com_url)
 
-        source_comment.reply(reply)
+        try:
+            source_comment.reply(reply)
+        except prawcore.exceptions.Forbidden:
+            try:
+                source_comment.reply(reply)
+            except prawcore.exceptions.Forbidden:
+                logging.error("Failed to redirect user to comment")
         self.database.message_insert(source_comment.id, comment.author.name, "comment reply", source_comment.body)
 
     def run(self, limit):
