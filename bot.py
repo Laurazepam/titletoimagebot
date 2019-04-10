@@ -35,7 +35,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '0.1.0.5'
+__version__ = '0.1.0.10'
 
 
 class TitleToImageBot(object):
@@ -83,8 +83,11 @@ class TitleToImageBot(object):
             else:
                 iteration = iteration + 1
                 CLIUtils.print_progress(iteration, post_limit + 1)
-
-            self.process_message(message)
+            # noinspection PyBroadException
+            try:
+                self.process_message(message)
+            except Exception as ex:
+                logging.error("Could not process %s with exception %s" % (message.id, ex))
 
     def check_subs_for_posts(self, post_limit=25):
         """

@@ -9,10 +9,10 @@ standard_reply_template = '''[Image with added {custom}title]({image_url}) {nsfw
 {warntag}\n\n
 ---\n\n
 Summon me with /u/title2imagebot or by PMing me a post with "parse" as the subject. | 
-[About](http://calicocat.live/t2ib) | 
-[feedback](https://reddit.com/message/compose/?to=CalicoCatalyst&subject=feedback%20{submission_id}) | 
-[source](https://github.com/calicocatalyst/titletoimagebot) | 
-Fork of TitleToImageBot'''
+[^About](http://calicocat.live/t2ib) ^| 
+[^feedback](https://reddit.com/message/compose/?to=CalicoCatalyst&subject=feedback%20{submission_id}) ^| 
+[^source](https://github.com/calicocatalyst/titletoimagebot) ^| 
+^Fork of TitleToImageBot'''
 
 minimal_reply_template = '[Processed Image]({image_url}) {nsfw}'
 
