@@ -35,7 +35,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '0.1.0.10'
+__version__ = '0.1.0.11'
 
 
 class TitleToImageBot(object):
