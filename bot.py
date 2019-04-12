@@ -35,17 +35,18 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '0.1.0.11'
+__version__ = '0.1.1.0'
 
 
 class TitleToImageBot(object):
+
     def __init__(self, config, database):
         """
         Set our API variables for us to access
 
         :param config: Configuration Object that stores a lot of variable info on how the bot runs
         :type config: Configuration
-        :param database: Database that has parsed objects.
+        :param database: Database that stores a list of parsed messages and submissions with some info
         :type database: BotDatabase
         """
         # The conifugration has all of the usernames/passwords/keys.
@@ -59,6 +60,12 @@ class TitleToImageBot(object):
         self.database = database
 
     def run(self, limit):
+        """
+        Check messages, then check subreddits that have asked us to run on them.
+
+        :param limit: How far back in our posts should we go.
+        :type limit: int
+        """
         logging.info('Checking Mentions')
         self.check_mentions_for_requests(limit)
         logging.info('Checking Autoreply Subs')
@@ -94,7 +101,7 @@ class TitleToImageBot(object):
         Check the subs listed in the config and send them to process_message
         Additionally, make sure any special post requirements listed in the config for the auto-subs are satisfied
 
-        :param post_limit: How far back should we go?
+        :param post_limit: How far back in our posts should we go?
         :type post_limit: int
         """
         subs = self.config.get_automatic_processing_subs()
@@ -180,13 +187,14 @@ class TitleToImageBot(object):
         body_original = message.body
         body = message.body.lower()
 
-        # Check if the post is in the database. If it is, skip it as it's already parsed
+        # Check if this message was already parsed. If so, dont parse it.
         if self.database.message_exists(message.id):
             logging.debug("bot.process_message() Message %s Already Parsed, Returning", message.id)
             return
 
-        # Respond to the SCP Bot that erroneously detects "SCP-2" in every post
-        if message_author.lower() == "the-paranoid-android":
+        # Respond to the SCP Bot that erroneously detects "SCP-2" in every post.
+        # There are two.
+        if (message_author.lower() == "the-paranoid-android") or (message_author.lower() == "the-noided-android"):
             message.reply("Thanks Marv")
             logging.info("Thanking marv")
             self.database.message_insert(message.id, message_author, message.subject.lower(), body)
@@ -224,6 +232,7 @@ class TitleToImageBot(object):
                 center_mode_triggers = ["!center", "!middle", "!c"]
                 auth_tag_triggers = ["!author", "tagauthor", "tagauth", "!a"]
 
+                # If we find any apparent commands include them
                 if any(x in body for x in dark_mode_triggers):
                     customargs.append("dark")
                 if any(x in body for x in center_mode_triggers):
@@ -495,7 +504,7 @@ class TitleToImageBot(object):
         if not customargs:
             image.add_title(title, boot)
         else:
-            image.add_title(title=title, boot=boot, customargs=customargs)
+            image.add_title(title=title, boot=boot, customargs=customargs, author=submission_author)
 
         imgur_url = self.upload(image)
 
@@ -701,6 +710,7 @@ class RedditImage:
     def __init__(self, image):
         self.image = image
         self.upscaled = False
+        self.title = ""
         width, height = image.size
         # upscale small images
         if image.size < (self.min_size, self.min_size):
@@ -717,6 +727,9 @@ class RedditImage:
             self.font_file,
             self._width // self.font_scale_factor
         )
+
+    def __str__(self):
+        return self.title
 
     def _split_title(self, title):
         """Split title on [',', ';', '.'] into multiple lines
@@ -770,9 +783,11 @@ class RedditImage:
         # remove empty lines
         return [line for line in lines if line]
 
-    def add_title(self, title, boot, bg_color='#fff', text_color='#000', customargs=None):
+    def add_title(self, title, boot, bg_color='#fff', text_color='#000', customargs=None, author=None):
         """Add title to new whitespace on image
 
+        :param author: Author of the submission
+        :type author: str
         :param customargs: List of custom arguments to parse
         :type customargs: list
         :param text_color:
@@ -783,14 +798,16 @@ class RedditImage:
         :type boot: bool
         """
 
-        beta_centering = False
+        self.title = title
+
+        title_centering = False
         dark_mode = False
         tag_author = False
 
         if customargs is not None:
             for arg in customargs:
                 if arg == "center":
-                    beta_centering = True
+                    title_centering = True
                 if arg == "dark":
                     dark_mode = True
                 if arg == "tagauth":
@@ -805,18 +822,22 @@ class RedditImage:
         line_height = self._font_title.getsize(title)[1] + RedditImage.margin
         lines = self._split_title(title) if boot else self._wrap_title(title)
         whitespace_height = (line_height * len(lines)) + RedditImage.margin
-        new = Image.new('RGB', (self._width, self._height + whitespace_height), bg_color)
+        tagauthheight = 0
+        if tag_author:
+            tagauthheight = 25
+        left_margin = 10
+        new = Image.new('RGB', (self._width, self._height + whitespace_height + tagauthheight), bg_color)
         new.paste(self.image, (0, whitespace_height))
         draw = ImageDraw.Draw(new)
         for i, line in enumerate(lines):
             w, h = self._font_title.getsize(line)
-            left_margin = ((self._width - w) / 2) if beta_centering else RedditImage.margin
+            left_margin = ((self._width - w) / 2) if title_centering else RedditImage.margin
             draw.text((left_margin, i * line_height + RedditImage.margin),
                       line, text_color, self._font_title)
 
         if tag_author:
-            # TODO: implement this
-            pass
+            draw.text((left_margin, self._height + whitespace_height + self.margin),
+                      author, text_color, self._font_title)
         self._width, self._height = new.size
         self.image = new
 

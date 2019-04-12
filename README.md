@@ -23,21 +23,14 @@ Custom arguments can be used like so:
 
 `!d, !dark` will invert the title section (white text on black)
 
+`!a, !author, !tagauth, !tagauthor` will include the submitter's username in the image.
+
 It appears dark mode was an intended feature at some point in the original bot, so thanks to gerenook for some of the code required to make it work
 
 ### PM parsing:
 Bot can be used via PM if its banned in a sub (lots of subs thanks to /r/BotBust banning me twice)
 
 PM a link to a submission. Subject should be "parse"
-
-#### Credits
-
-/u/gerenook for original bot's code, most of the `RedditImage` class is his work.
-
-Roboto-Emoji is a custom font I created in FontForge that adds support for emojis.  
-Feel free to use it. 
-
-GfyPy is a gfycat python api I wrote with extremely basic support for what i needed. It's on my pinned repositories tab. Feel free to contribute as it's currently the only gfycat python api with auth support
 
 ## Running the bot
 
@@ -69,4 +62,12 @@ optional arguments:
 
 ## TODO:
 Fix Gif framerate issues  
-Implement a "Credit the author" custom argument
+
+# Credits
+
+/u/gerenook for original bot's code, most of the `RedditImage` class is his work.
+
+Roboto-Emoji is a custom font I created in FontForge that adds support for emojis.  
+Feel free to use it. 
+
+GfyPy is a gfycat python api I wrote with extremely basic support for what i needed. It's on my pinned repositories tab. Feel free to contribute as it's currently the only gfycat python api with auth support
