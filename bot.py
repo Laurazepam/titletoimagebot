@@ -824,7 +824,7 @@ class RedditImage:
         whitespace_height = (line_height * len(lines)) + RedditImage.margin
         tagauthheight = 0
         if tag_author:
-            tagauthheight = 25
+            tagauthheight = 50
         left_margin = 10
         new = Image.new('RGB', (self._width, self._height + whitespace_height + tagauthheight), bg_color)
         new.paste(self.image, (0, whitespace_height))
