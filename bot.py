@@ -629,6 +629,12 @@ class TitleToImageBot(object):
         return response
 
     def upload_to_gfycat(self, local_gif_url):
+        """
+
+
+        :param local_gif_url:
+        :return:
+        """
         generated_gfycat = self.gfycat.upload_file(local_gif_url)
         return generated_gfycat
 
@@ -824,7 +830,7 @@ class RedditImage:
         whitespace_height = (line_height * len(lines)) + RedditImage.margin
         tagauthheight = 0
         if tag_author:
-            tagauthheight = 25
+            tagauthheight = 50
         left_margin = 10
         new = Image.new('RGB', (self._width, self._height + whitespace_height + tagauthheight), bg_color)
         new.paste(self.image, (0, whitespace_height))
