@@ -13,10 +13,10 @@ Written and maintained by CalicoCatalyst
 """
 import argparse
 import configparser
+import curses
 import logging
 import re
 import sqlite3
-import sys
 import time
 from io import BytesIO
 from math import ceil
@@ -41,7 +41,7 @@ __version__ = '0.1.1.0'
 
 class TitleToImageBot(object):
 
-    def __init__(self, config, database):
+    def __init__(self, config, database, screen):
         """
         Set our API variables for us to access
 
@@ -57,6 +57,7 @@ class TitleToImageBot(object):
         self.reddit = self.config.auth_reddit_from_config()
         self.imgur = self.config.get_imgur_client_config()
         self.gfycat = self.config.get_gfycat_client_config()
+        self.screen = screen
 
         self.database = database
 
@@ -67,9 +68,9 @@ class TitleToImageBot(object):
         :param limit: How far back in our posts should we go.
         :type limit: int
         """
-        logging.info('Checking Mentions')
+        self.screen.set_current_action_status("", 'Checking Mentions')
         self.check_mentions_for_requests(limit)
-        logging.info('Checking Autoreply Subs')
+        self.screen.set_current_action_status("", 'Checking Autoreply Subs')
         self.check_subs_for_posts(limit)
 
     def check_mentions_for_requests(self, post_limit=10):
@@ -82,15 +83,18 @@ class TitleToImageBot(object):
         # This is for the progress bar
         iteration = 1
         # Start the progress bar before we make the request.
-        CLIUtils.print_progress(iteration, post_limit)
+        line = CLI.get_progress_line(iteration, post_limit)
+        self.screen.set_current_action_status("Checking Inbox for requests", line)
         for message in self.reddit.inbox.all(limit=post_limit):
             # If we're on the first one, show the progress bar not moving so we dont go over 100%
             if iteration is 1:
                 iteration = iteration + 1
-                CLIUtils.print_progress(1, post_limit + 1)
+                line = CLI.get_progress_line(1, post_limit + 1)
+                self.screen.set_current_action_status("Checking Inbox for requests", line)
             else:
                 iteration = iteration + 1
-                CLIUtils.print_progress(iteration, post_limit + 1)
+                line = CLI.get_progress_line(iteration, post_limit + 1)
+                self.screen.set_current_action_status("Checking Inbox for requests", line)
             # noinspection PyBroadException
             try:
                 self.process_message(message)
@@ -114,7 +118,8 @@ class TitleToImageBot(object):
             subr = self.reddit.subreddit(sub)
             for post in subr.new(limit=post_limit):
                 iters += 1
-                CLIUtils.print_progress(iters, totalits)
+                line = CLI.get_progress_line(iters, totalits)
+                self.screen.set_current_action_status("Checking Subs for posts", line)
 
                 if self.database.submission_exists(post.id):
                     continue
@@ -126,7 +131,7 @@ class TitleToImageBot(object):
                 if has_triggers:
                     triggers = str(self.config.configfile[sub]['triggers']).split('|')
                     if not any(t in title.lower() for t in triggers):
-                        logging.info('Title %s doesnt appear to contain any of %s, adding to parsed and skipping'
+                        logging.debug('Title %s doesnt appear to contain any of %s, adding to parsed and skipping'
                                      % (title, self.config.configfile[sub]["triggers"]))
                         self.database.submission_insert(post.id, post.author.name, title, post.url)
                         continue
@@ -197,7 +202,7 @@ class TitleToImageBot(object):
         # There are two.
         if (message_author.lower() == "the-paranoid-android") or (message_author.lower() == "the-noided-android"):
             message.reply("Thanks Marv")
-            logging.info("Thanking marv")
+            logging.debug("Thanking marv")
             self.database.message_insert(message.id, message_author, message.subject.lower(), body)
             return
 
@@ -352,7 +357,7 @@ class TitleToImageBot(object):
 
         if url is None:
 
-            logging.info('URL returned as none.')
+            self.screen.set_current_action_status("", 'URL returned as none.')
             logging.debug('Checking if Bot Has Already Processed Submission')
             # This should return if the bot has already replied.
             for comment in submission.comments.list():
@@ -626,7 +631,11 @@ class TitleToImageBot(object):
         :return: Uploaded image object
         :rtype: pyimgur.Image
         """
+        self.screen.set_current_action_status("", "Uploading to Imgur...")
+        self.screen.set_imgur_status("Uploading...")
         response = self.imgur.upload_image(local_image_url, title="Uploaded by /u/%s" % self.config.bot_username)
+        self.screen.set_current_action_status("", "Complete")
+        self.screen.set_imgur_status("Connected")
         return response
 
     def upload_to_gfycat(self, local_gif_url):
@@ -652,7 +661,7 @@ class TitleToImageBot(object):
         :rtype: bool
         """
 
-        logging.info('Creating reply')
+        self.screen.set_current_action_status("", 'Creating reply')
         if submission.subreddit in self.config.get_minimal_sub_list():
             reply = messages.minimal_reply_template(
                 image_url=url,
@@ -895,7 +904,8 @@ class Configuration(object):
 
 class BotDatabase(object):
 
-    def __init__(self, db_filename):
+    def __init__(self, db_filename, interface):
+        self.interface = interface
         self._sql_conn = sqlite3.connect(db_filename)
         self._sql = self._sql_conn.cursor()
 
@@ -911,31 +921,39 @@ class BotDatabase(object):
         :returns: True if message was found, else False
         :rtype: bool
         """
+        self.interface.set_data_status("Querying...")
         self._sql.execute('SELECT EXISTS(SELECT 1 FROM messages WHERE id=?)', (message_id,))
+        self.interface.set_data_status("Connected")
         if self._sql.fetchone()[0]:
             return True
         else:
             return False
 
     def submission_exists(self, message_id):
+        self.interface.set_data_status("Querying...")
         self._sql.execute('SELECT EXISTS(SELECT 1 FROM submissions WHERE id=?)', (message_id,))
+        self.interface.set_data_status("Connected")
         if self._sql.fetchone()[0]:
             return True
         else:
             return False
 
     def message_parsed(self, message_id):
+        self.interface.set_data_status("Querying...")
         self._sql.execute('SELECT EXISTS(SELECT 1 FROM messages WHERE id=? AND parsed=1)', (message_id,))
+        self.interface.set_data_status("Connected")
         if self._sql.fetchone()[0]:
             return True
         else:
             return False
 
     def message_insert(self, message_id, message_author, subject, body):
+        self.interface.set_data_status("Querying...")
         """Insert message into messages table"""
         self._sql.execute('INSERT INTO messages (id, author, subject, body) VALUES (?, ?, ?, ?)',
                           (message_id, message_author, subject, body))
         self._sql_conn.commit()
+        self.interface.set_data_status("Connected")
 
     def submission_select(self, submission_id):
         """Select all attributes of submission
@@ -944,8 +962,10 @@ class BotDatabase(object):
         :returns: query result, None if id not found
         :rtype: dict, NoneType
         """
+        self.interface.set_data_status("Querying...")
         self._sql.execute('SELECT * FROM submissions WHERE id=?', (submission_id,))
         result = self._sql.fetchone()
+        self.interface.set_data_status("Connected")
         if not result:
             return None
         return {
@@ -959,10 +979,12 @@ class BotDatabase(object):
         }
 
     def submission_insert(self, submission_id, submission_author, title, url):
+        self.interface.set_data_status("Querying...")
         """Insert submission into submissions table"""
         self._sql.execute('INSERT INTO submissions (id, author, title, url) VALUES (?, ?, ?, ?)',
                           (submission_id, submission_author, title, url))
         self._sql_conn.commit()
+        self.interface.set_data_status("Connected")
 
     def submission_set_retry(self, submission_id, delete_message=False, message=None):
         """Set retry flag for given submission, delete message from db if desired
@@ -973,20 +995,24 @@ class BotDatabase(object):
         :param message: the message to delete
         :type message: praw.models.Comment, NoneType
         """
+        self.interface.set_data_status("Querying...")
         self._sql.execute('UPDATE submissions SET retry=1 WHERE id=?', (submission_id,))
         if delete_message:
             if not message:
                 raise TypeError('If delete_message is True, message must be set')
             self._sql.execute('DELETE FROM messages WHERE id=?', (message.id,))
         self._sql_conn.commit()
+        self.interface.set_data_status("Connected")
 
     def submission_clear_retry(self, submission_id):
         """Clear retry flag for given submission_id
         :param submission_id: the submission id to clear retry
         :type submission_id: str
         """
+        self.interface.set_data_status("Querying...")
         self._sql.execute('UPDATE submissions SET retry=0 WHERE id=?', (submission_id,))
         self._sql_conn.commit()
+        self.interface.set_data_status("Connected")
 
     def submission_set_imgur_url(self, submission_id, imgur_url):
         """Set imgur url for given submission
@@ -995,15 +1021,64 @@ class BotDatabase(object):
         :param imgur_url: the imgur url to update
         :type imgur_url: str
         """
+        self.interface.set_data_status("Querying...")
         self._sql.execute('UPDATE submissions SET imgur_url=? WHERE id=?',
                           (imgur_url, submission_id))
         self._sql_conn.commit()
+        self.interface.set_data_status("Connected")
 
 
-class CLIUtils(object):
+class CLI(object):
+
+    def __init__(self):
+        """
+        Initialize our command line interface.
+
+        If you want to clean up everything related to this please do because I hate it
+        """
+
+        self.stdscr = curses.initscr()
+        curses.noecho()
+        curses.cbreak()
+
+        self.reddituser = "Updating..."
+        self.redditstatus = "Not Connected"
+        self.imgurstatus = "Not Connected"
+        self.datastatus = "Not Connected"
+
+    def set_reddit_user(self, reddituser):
+        self.reddituser = reddituser
+        self.update_bot_status_info()
+
+    def set_reddit_status(self, redditstatus):
+        self.redditstatus = redditstatus
+        self.update_bot_status_info()
+
+    def set_imgur_status(self, imgurstatus):
+        # TODO: Proper global imgur rate limit handling
+        self.imgurstatus = imgurstatus
+        self.update_bot_status_info()
+
+    def set_data_status(self, datastatus):
+        self.datastatus = datastatus
+        self.update_bot_status_info()
+
+    def update_bot_status_info(self):
+        self.stdscr.refresh()
+        self.clear_line(0)
+        self.clear_line(5)
+        self.clear_line(6)
+        self.clear_line(7)
+        self.clear_line(9)
+        self.stdscr.addstr(0, 0, "Title2ImageBot Version %s by CalicoCatalyst" % __version__)
+        self.stdscr.addstr(5, 0, "Reddit Username : %s" % self.reddituser)
+        self.stdscr.addstr(6, 0, "Reddit Status   : %s" % self.redditstatus)
+        self.stdscr.addstr(7, 0, "Imgur Status    : %s" % self.imgurstatus)
+        self.stdscr.addstr(9, 0, "Database Status : %s" % self.datastatus)
+        self.stdscr.refresh()
 
     @staticmethod
-    def print_progress(iteration, total, prefix='', suffix='', decimals=1, bar_length=25):
+    def get_progress_line(iteration, total, prefix='', suffix='', decimals=1, bar_length=25):
         """
         Call in a loop to create terminal progress bar
         @params:
@@ -1019,14 +1094,24 @@ class CLIUtils(object):
         filled_length = int(round(bar_length * iteration / float(total)))
         bar = '+' * filled_length + '-' * (bar_length - filled_length)
 
-        sys.stdout.write('\r%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix)),
+        return '%s|%s| %s%s %s' % (prefix, bar, percents, '%', suffix)
 
-        if iteration == total:
-            sys.stdout.write('\n')
-        sys.stdout.flush()
+    def set_current_action_status(self, action, statusline):
+        """progress: 0-10"""
+        self.clear_line(14)
+        self.clear_line(15)
+        self.stdscr.addstr(14, 0, "%s" % action)
+        self.stdscr.addstr(15, 0, "%s" % statusline)
+        self.stdscr.refresh()
+
+    def clear_line(self, y):
+        self.stdscr.move(y, 0)
+        self.stdscr.clrtoeol()
 
 
 def main():
+
+    # Parse CLI args
     parser = argparse.ArgumentParser(description='Bot To Add Titles To Images')
     parser.add_argument('-d', '--debug', help='Enable Debug Logging', action='store_true')
     parser.add_argument('-l', '--loop', help='Enable Looping Function', action='store_true')
@@ -1035,35 +1120,78 @@ def main():
     parser.add_argument('interval', help='time (in seconds) to wait between cycles', type=int)
 
     args = parser.parse_args()
+
+    # Turn on debug mode with -d flag
+    # TODO: Figure out how to get this working with curses. Ideally, curses replaces it
     if args.debug:
         logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.DEBUG)
     else:
         logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.INFO)
 
+    # Status line
+    # TODO: Add this info to curses
+    # logging.info('Bot initialized, processing the last %s submissions/messages every %s seconds' % (args.limit,
+    #                                                                                                args.interval))
+
+    # Set up CLI with curses
+
+    interface = CLI()
+
+    interface.update_bot_status_info()
+
+    # Set up database
     configuration = Configuration("config.ini")
-    database = BotDatabase("t2ib.sqlite")
+    database = BotDatabase("t2ib.sqlite", interface)
 
-    logging.info('Bot initialized, processing the last %s submissions/messages every %s seconds' % (args.limit,
-                                                                                                    args.interval))
+    # Begin making our CLI screen
 
-    bot = TitleToImageBot(configuration, database)
+    bot = TitleToImageBot(configuration, database, interface)
 
-    logging.debug('Debug Enabled')
+    # Status testing and stuff for the CLI
+
+    # Get username. This will also let us know if we cant connect at all. thanks praw author guy.
+    # noinspection PyBroadException
+    try:
+        interface.set_reddit_user(bot.reddit.user.me().name)
+        interface.set_reddit_status("Connected")
+    except Exception as ex:
+        interface.set_reddit_user("Could not connect")
+        interface.set_reddit_status("Unable to authenticate with %s" % ex)
+
+    # noinspection PyBroadException
+    try:
+        bot.imgur.get_image('S1jmapR')
+        interface.set_imgur_status("Connected")
+    except Exception as ex:
+        interface.set_imgur_status("Unable to connect with %s" % ex)
+
+    # noinspection PyBroadException
+    try:
+        database.submission_exists("aaaaaa")
+        interface.set_data_status("Connected")
+    except Exception as ex:
+        interface.set_data_status("Unable to connect. Yikes. With %s" % ex)
+
+    # logging.debug('Debug Enabled')
 
     # noinspection PyBroadException
     try:
         if not args.loop:
             bot.run(args.limit)
-            logging.info('Checking Complete, Exiting Program')
+            interface.set_current_action_status("", 'Checking Complete, Exiting Program')
             exit(0)
         while True:
             bot.run(args.limit)
-            logging.info('Checking Complete')
+            interface.set_current_action_status("", 'Checking Complete')
             time.sleep(args.interval)
     except KeyboardInterrupt:
         print("Command line debugging enabled")
+        # TODO: Clean this up w/ curses
         while True:
-            command = raw_input(">>>    ")
+            try:
+                command = raw_input(">>>    ")
+            except KeyboardInterrupt:
+                break
             if str(command) == "quit":
                 break
             exec(command)
@@ -1073,6 +1201,10 @@ def main():
         exit(0)
     except Exception:
         bot.reddit.redditor(bot.config.maintainer).message("bot crash", "Bot Crashed :p")
+    finally:
+        curses.echo()
+        curses.nocbreak()
+        curses.endwin()
 
 
 if __name__ == '__main__':
