@@ -30,6 +30,7 @@ import pyimgur
 import requests
 from PIL import Image, ImageSequence, ImageFont, ImageDraw
 from gfypy import gfycat
+from pip._vendor.distlib.compat import raw_input
 
 import messages
 
@@ -1060,12 +1061,18 @@ def main():
             logging.info('Checking Complete')
             time.sleep(args.interval)
     except KeyboardInterrupt:
+        print("Command line debugging enabled")
+        while True:
+            command = raw_input(">>>    ")
+            if str(command) == "quit":
+                break
+            exec(command)
         logging.debug("KeyboardInterrupt Detected, Cleaning up and exiting...")
         print("Cleaning up and exiting...")
         database.cleanup()
         exit(0)
     except Exception:
-        bot.reddit.redditor(bot.config.maintainer).message("Bot Crashed :p")
+        bot.reddit.redditor(bot.config.maintainer).message("bot crash", "Bot Crashed :p")
 
 
 if __name__ == '__main__':
