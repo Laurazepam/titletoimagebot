@@ -13,6 +13,7 @@ Written and maintained by CalicoCatalyst
 """
 import argparse
 import configparser
+import curses
 import logging
 import re
 import sqlite3
@@ -41,7 +42,7 @@ __version__ = '0.1.1.0'
 
 class TitleToImageBot(object):
 
-    def __init__(self, config, database):
+    def __init__(self, config, database, screen):
         """
         Set our API variables for us to access
 
@@ -57,6 +58,7 @@ class TitleToImageBot(object):
         self.reddit = self.config.auth_reddit_from_config()
         self.imgur = self.config.get_imgur_client_config()
         self.gfycat = self.config.get_gfycat_client_config()
+        self.stdscr = screen
 
         self.database = database
 
@@ -82,15 +84,18 @@ class TitleToImageBot(object):
         # This is for the progress bar
         iteration = 1
         # Start the progress bar before we make the request.
-        CLIUtils.print_progress(iteration, post_limit)
+        line = CLIUtils.print_progress(iteration, post_limit)
+        CLIUtils.report_progress(self.stdscr, "Checking Subs for posts", line)
         for message in self.reddit.inbox.all(limit=post_limit):
             # If we're on the first one, show the progress bar not moving so we dont go over 100%
             if iteration is 1:
                 iteration = iteration + 1
-                CLIUtils.print_progress(1, post_limit + 1)
+                line = CLIUtils.print_progress(1, post_limit + 1)
+                CLIUtils.report_progress(self.stdscr, "Checking Subs for posts", line)
             else:
                 iteration = iteration + 1
-                CLIUtils.print_progress(iteration, post_limit + 1)
+                line = CLIUtils.print_progress(iteration, post_limit + 1)
+                CLIUtils.report_progress(self.stdscr, "Checking Subs for posts", line)
             # noinspection PyBroadException
             try:
                 self.process_message(message)
@@ -114,7 +119,8 @@ class TitleToImageBot(object):
             subr = self.reddit.subreddit(sub)
             for post in subr.new(limit=post_limit):
                 iters += 1
-                CLIUtils.print_progress(iters, totalits)
+                line = CLIUtils.print_progress(iters, totalits)
+                CLIUtils.report_progress(self.stdscr, "Checking Subs for posts", line)
 
                 if self.database.submission_exists(post.id):
                     continue
@@ -1019,11 +1025,20 @@ class CLIUtils(object):
         filled_length = int(round(bar_length * iteration / float(total)))
         bar = '+' * filled_length + '-' * (bar_length - filled_length)
 
-        sys.stdout.write('\r%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix)),
+        # sys.stdout.write('\r%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix)),
 
-        if iteration == total:
-            sys.stdout.write('\n')
+        # if iteration == total:
+
+            # sys.stdout.write('\n')
         sys.stdout.flush()
+        return '%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix)
+
+    @staticmethod
+    def report_progress(stdscr, action, statusline):
+        """progress: 0-10"""
+        stdscr.addstr(0, 0, "%s" % action)
+        stdscr.addstr(1, 0, "%s" % statusline)
+        stdscr.refresh()
 
 
 def main():
@@ -1035,6 +1050,9 @@ def main():
     parser.add_argument('interval', help='time (in seconds) to wait between cycles', type=int)
 
     args = parser.parse_args()
+
+    stdscr = curses.initscr()
+
     if args.debug:
         logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.DEBUG)
     else:
@@ -1046,7 +1064,7 @@ def main():
     logging.info('Bot initialized, processing the last %s submissions/messages every %s seconds' % (args.limit,
                                                                                                     args.interval))
 
-    bot = TitleToImageBot(configuration, database)
+    bot = TitleToImageBot(configuration, database, stdscr)
 
     logging.debug('Debug Enabled')
 
