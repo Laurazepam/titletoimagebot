@@ -68,9 +68,9 @@ class TitleToImageBot(object):
         :param limit: How far back in our posts should we go.
         :type limit: int
         """
-        self.screen.set_current_action_status("", 'Checking Mentions')
+        self.screen.set_current_action_status('Checking Mentions', "")
         self.check_mentions_for_requests(limit)
-        self.screen.set_current_action_status("", 'Checking Autoreply Subs')
+        self.screen.set_current_action_status('Checking Autoreply Subs', "")
         self.check_subs_for_posts(limit)
 
     def check_mentions_for_requests(self, post_limit=10):
@@ -357,7 +357,7 @@ class TitleToImageBot(object):
 
         if url is None:
 
-            self.screen.set_current_action_status("", 'URL returned as none.')
+            self.screen.set_current_action_status('URL returned as none.', "")
             logging.debug('Checking if Bot Has Already Processed Submission')
             # This should return if the bot has already replied.
             for comment in submission.comments.list():
@@ -631,10 +631,10 @@ class TitleToImageBot(object):
         :return: Uploaded image object
         :rtype: pyimgur.Image
         """
-        self.screen.set_current_action_status("", "Uploading to Imgur...")
+        self.screen.set_current_action_status("Uploading to Imgur...", "")
         self.screen.set_imgur_status("Uploading...")
         response = self.imgur.upload_image(local_image_url, title="Uploaded by /u/%s" % self.config.bot_username)
-        self.screen.set_current_action_status("", "Complete")
+        self.screen.set_current_action_status("Complete", "")
         self.screen.set_imgur_status("Connected")
         return response
 
@@ -661,7 +661,7 @@ class TitleToImageBot(object):
         :rtype: bool
         """
 
-        self.screen.set_current_action_status("", 'Creating reply')
+        self.screen.set_current_action_status('Creating reply', "")
         if submission.subreddit in self.config.get_minimal_sub_list():
             reply = messages.minimal_reply_template(
                 image_url=url,
@@ -1178,11 +1178,11 @@ def main():
     try:
         if not args.loop:
             bot.run(args.limit)
-            interface.set_current_action_status("", 'Checking Complete, Exiting Program')
+            interface.set_current_action_status('Checking Complete, Exiting Program', "")
             exit(0)
         while True:
             bot.run(args.limit)
-            interface.set_current_action_status("", 'Checking Complete')
+            interface.set_current_action_status('Checking Complete', "")
             time.sleep(args.interval)
     except KeyboardInterrupt:
         print("Command line debugging enabled")
