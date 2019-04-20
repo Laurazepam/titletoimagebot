@@ -29,6 +29,7 @@ import prawcore
 import pyimgur
 import requests
 from PIL import Image, ImageSequence, ImageFont, ImageDraw
+from bs4 import BeautifulSoup
 from gfypy import gfycat
 from pip._vendor.distlib.compat import raw_input
 
@@ -36,7 +37,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.0.0'
+__version__ = '1.1.0.1'
 
 
 class TitleToImageBot(object):
@@ -99,7 +100,7 @@ class TitleToImageBot(object):
             try:
                 self.process_message(message)
             except Exception as ex:
-                logging.error("Could not process %s with exception %s" % (message.id, ex))
+                logging.debug("Could not process %s with exception %s" % (message.id, ex))
 
     def check_subs_for_posts(self, post_limit=25):
         """
@@ -593,6 +594,20 @@ class TitleToImageBot(object):
             return None
         # remove(path_mp4)
         return url
+
+    def get_params_from_twitter(self, link):
+        page = requests.get(link)
+        soup = BeautifulSoup(page.text, 'html.parser')
+        tweet_text = soup.select(".tweet-text")
+        tweet_text_raw = tweet_text[0] if len(tweet_text) > 0 else ""
+        cleaned = BeautifulSoup(str(tweet_text_raw))
+        invalid_tags = ['a', 'p']
+        for tag in invalid_tags:
+            for match in cleaned.findAll(tag):
+                match.unwrap()
+        twitpiclink = 'pic.twitter.com'
+        nonfluff = str(cleaned).split(twitpiclink, 1)[0]
+        return [nonfluff]
 
     def upload(self, reddit_image):
         """
