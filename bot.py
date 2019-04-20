@@ -15,6 +15,7 @@ import argparse
 import configparser
 import curses
 import logging
+import os
 import re
 import sqlite3
 import time
@@ -31,6 +32,7 @@ import requests
 from PIL import Image, ImageSequence, ImageFont, ImageDraw
 from bs4 import BeautifulSoup
 from gfypy import gfycat
+# noinspection PyProtectedMember
 from pip._vendor.distlib.compat import raw_input
 
 import messages
@@ -70,8 +72,10 @@ class TitleToImageBot(object):
         :type limit: int
         """
         self.screen.set_current_action_status('Checking Mentions', "")
+        logging.info("Checking Mentions")
         self.check_mentions_for_requests(limit)
         self.screen.set_current_action_status('Checking Autoreply Subs', "")
+        logging.info("Checking Autoreply Subs")
         self.check_subs_for_posts(limit)
 
     def check_mentions_for_requests(self, post_limit=10):
@@ -100,7 +104,7 @@ class TitleToImageBot(object):
             try:
                 self.process_message(message)
             except Exception as ex:
-                logging.debug("Could not process %s with exception %s" % (message.id, ex))
+                logging.info("Could not process %s with exception %s" % (message.id, ex))
 
     def check_subs_for_posts(self, post_limit=25):
         """
@@ -133,7 +137,7 @@ class TitleToImageBot(object):
                     triggers = str(self.config.configfile[sub]['triggers']).split('|')
                     if not any(t in title.lower() for t in triggers):
                         logging.debug('Title %s doesnt appear to contain any of %s, adding to parsed and skipping'
-                                     % (title, self.config.configfile[sub]["triggers"]))
+                                      % (title, self.config.configfile[sub]["triggers"]))
                         self.database.submission_insert(post.id, post.author.name, title, post.url)
                         continue
                 else:
@@ -595,7 +599,8 @@ class TitleToImageBot(object):
         # remove(path_mp4)
         return url
 
-    def get_params_from_twitter(self, link):
+    @staticmethod
+    def get_params_from_twitter(link):
         page = requests.get(link)
         soup = BeautifulSoup(page.text, 'html.parser')
         tweet_text = soup.select(".tweet-text")
@@ -1055,11 +1060,14 @@ class CLI(object):
         self.stdscr = curses.initscr()
         curses.noecho()
         curses.cbreak()
+        curses.curs_set(0)
 
         self.reddituser = "Updating..."
         self.redditstatus = "Not Connected"
         self.imgurstatus = "Not Connected"
         self.datastatus = "Not Connected"
+        self.catx = 35
+        self.caty = 4
 
     def set_reddit_user(self, reddituser):
         self.reddituser = reddituser
@@ -1090,6 +1098,7 @@ class CLI(object):
         self.stdscr.addstr(6, 0, "Reddit Status   : %s" % self.redditstatus)
         self.stdscr.addstr(7, 0, "Imgur Status    : %s" % self.imgurstatus)
         self.stdscr.addstr(9, 0, "Database Status : %s" % self.datastatus)
+        self.print_cat(self.catx, self.caty)
         self.stdscr.refresh()
 
     @staticmethod
@@ -1117,15 +1126,34 @@ class CLI(object):
         self.clear_line(15)
         self.stdscr.addstr(14, 0, "%s" % action)
         self.stdscr.addstr(15, 0, "%s" % statusline)
+        self.print_cat(self.catx, self.caty)
         self.stdscr.refresh()
 
     def clear_line(self, y):
         self.stdscr.move(y, 0)
         self.stdscr.clrtoeol()
+        self.print_cat(self.catx, self.caty)
+        self.stdscr.refresh()
+
+    def print_cat(self, startx, starty):
+        line1 = '                      (`.-,\')'
+        line2 = '                    .-\'     ;'
+        line3 = '                _.-\'   , `,-'
+        line4 = '          _ _.-\'     .\'  /._'
+        line5 = '        .\' `  _.-.  /  ,\'._;)'
+        line6 = '       (       .  )-| ('
+        line7 = '        )`,_ ,\'_,\'  \_;)'
+        line8 = '(\'_  _,\'.\'  (___,))'
+        line9 = ' `-:;.-\''
+        lines = [line1, line2, line3, line4, line5, line6, line7, line8, line9]
+
+        num = 0
+        for i in range(starty, starty + 9):
+            self.stdscr.addstr(i, startx, lines[num])
+            num += 1
 
 
 def main():
-
     # Parse CLI args
     parser = argparse.ArgumentParser(description='Bot To Add Titles To Images')
     parser.add_argument('-d', '--debug', help='Enable Debug Logging', action='store_true')
@@ -1136,12 +1164,17 @@ def main():
 
     args = parser.parse_args()
 
+    current_timestamp = str(time.time())
+    os.rename("latest.log", "logfile-" + current_timestamp + ".log")
+
     # Turn on debug mode with -d flag
     # TODO: Figure out how to get this working with curses. Ideally, curses replaces it
     if args.debug:
-        logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.DEBUG)
+        logging.basicConfig(filename="latest.log", format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S',
+                            level=logging.DEBUG)
     else:
-        logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.INFO)
+        logging.basicConfig(filename="latest.log", format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S',
+                            level=logging.INFO)
 
     # Status line
     # TODO: Add this info to curses
