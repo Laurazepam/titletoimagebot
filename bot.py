@@ -39,7 +39,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.0.1'
+__version__ = '1.1.0.4'
 
 
 class TitleToImageBot(object):
@@ -1062,11 +1062,13 @@ class CLI(object):
         curses.cbreak()
         curses.curs_set(0)
 
+        _, self.cols = self.stdscr.getmaxyx()
+
         self.reddituser = "Updating..."
         self.redditstatus = "Not Connected"
         self.imgurstatus = "Not Connected"
         self.datastatus = "Not Connected"
-        self.catx = 35
+        self.catx = self.cols - 36
         self.caty = 4
 
     def set_reddit_user(self, reddituser):
@@ -1136,6 +1138,8 @@ class CLI(object):
         self.stdscr.refresh()
 
     def print_cat(self, startx, starty):
+        if self.cols < 66:
+            return
         line1 = '                      (`.-,\')'
         line2 = '                    .-\'     ;'
         line3 = '                _.-\'   , `,-'
@@ -1151,6 +1155,7 @@ class CLI(object):
         for i in range(starty, starty + 9):
             self.stdscr.addstr(i, startx, lines[num])
             num += 1
+        self.stdscr.addstr(starty+11, startx-15, 'Reddit Bot Interactive CLI by CalicoCatalyst')
 
 
 def main():
@@ -1165,15 +1170,15 @@ def main():
     args = parser.parse_args()
 
     current_timestamp = str(time.time())
-    os.rename("latest.log", "logfile-" + current_timestamp + ".log")
+    os.rename("logs/latest.log", "logs/logfile-" + current_timestamp + ".log")
 
     # Turn on debug mode with -d flag
     # TODO: Figure out how to get this working with curses. Ideally, curses replaces it
     if args.debug:
-        logging.basicConfig(filename="latest.log", format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S',
+        logging.basicConfig(filename="logs/latest.log", format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S',
                             level=logging.DEBUG)
     else:
-        logging.basicConfig(filename="latest.log", format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S',
+        logging.basicConfig(filename="logs/latest.log", format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S',
                             level=logging.INFO)
 
     # Status line
