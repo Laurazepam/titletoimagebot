@@ -39,7 +39,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.0.4'
+__version__ = '1.1.1.1'
 
 
 class TitleToImageBot(object):
@@ -89,16 +89,19 @@ class TitleToImageBot(object):
         iteration = 1
         # Start the progress bar before we make the request.
         line = CLI.get_progress_line(iteration, post_limit)
+
         self.screen.set_current_action_status("Checking Inbox for requests", line)
         for message in self.reddit.inbox.all(limit=post_limit):
             # If we're on the first one, show the progress bar not moving so we dont go over 100%
             if iteration is 1:
                 iteration = iteration + 1
                 line = CLI.get_progress_line(1, post_limit + 1)
+
                 self.screen.set_current_action_status("Checking Inbox for requests", line)
             else:
                 iteration = iteration + 1
                 line = CLI.get_progress_line(iteration, post_limit + 1)
+
                 self.screen.set_current_action_status("Checking Inbox for requests", line)
             # noinspection PyBroadException
             try:
@@ -119,11 +122,13 @@ class TitleToImageBot(object):
         # Caluclate the total amount of posts to be parsed
         totalits = len(subs) * post_limit
         iters = 0
+
         for sub in subs:
             subr = self.reddit.subreddit(sub)
             for post in subr.new(limit=post_limit):
                 iters += 1
                 line = CLI.get_progress_line(iters, totalits)
+
                 self.screen.set_current_action_status("Checking Subs for posts", line)
 
                 if self.database.submission_exists(post.id):
@@ -152,7 +157,11 @@ class TitleToImageBot(object):
                         logging.debug('Threshold met, posting and adding to parsed')
                 else:
                     logging.debug('No threshold for %s, replying to everything :)' % sub)
-                processed = self.process_submission(post, None, None)
+                try:
+                    processed = self.process_submission(post, None, None)
+                except Exception as ex:
+                    logging.debug("%s in check_subs_for_posts on process_submission" % ex)
+                    processed = None
                 if processed is not None:
                     processed_url = processed[0]
                     processed_submission = processed[1]
@@ -253,8 +262,13 @@ class TitleToImageBot(object):
             else:
                 customargs = []
 
-            processed = self.process_submission(message.submission, message, title,
-                                                dm=False, request_body=body, customargs=customargs)
+            if "twitter" in message.submission.url:
+                processed = self.process_twitter_link(message.submission, message, title,
+                                                      dm=False, request_body=body, customargs=customargs)
+            else:
+                processed = self.process_submission(message.submission, message, title,
+                                                    dm=False, request_body=body, customargs=customargs)
+
             if processed is not None:
                 processed_url = processed[0]
                 processed_submission = processed[1]
@@ -358,7 +372,11 @@ class TitleToImageBot(object):
         :type request_body:
         """
 
-        url = self.process_image_submission(submission=submission, custom_title=title, customargs=customargs)
+        sub_url = submission.url
+        subr = submission.subreddit.display_name.lower()
+        auth = submission.author.name
+
+        url = self.process_image(title, sub_url, subr, auth, submission.id, custom_title=title, customargs=customargs)
 
         if url is None:
 
@@ -395,6 +413,53 @@ class TitleToImageBot(object):
         custom_title_exists = True if title is not None else False
         return [url, submission, source_comment, custom_title_exists]
 
+    # noinspection PyUnusedLocal
+    def process_twitter_link(self, submission, source_comment, title, dm=None, request_body=None, customargs=None):
+
+        sub_url = submission.url
+        subreddit = submission.subreddit.display_name.lower()
+        auth = submission.author.name
+
+        title, twit_url = self.get_params_from_twitter(sub_url)
+
+        url = self.process_image(title, twit_url, subreddit, auth, submission.id, custom_title=title, customargs=customargs)
+
+        if url is None:
+
+            self.screen.set_current_action_status('URL returned as none.', "")
+            logging.debug('Checking if Bot Has Already Processed Submission')
+            # This should return if the bot has already replied.
+            for comment in submission.comments.list():
+                if isinstance(comment, praw.models.MoreComments):
+                    # See praw docs on MoreComments
+                    continue
+                if not comment or comment.author is None:
+                    # If the comment or comment author was deleted, skip it
+                    continue
+                if comment.author.name == self.reddit.user.me().name and 'Image with added title' in comment.body:
+                    if source_comment:
+                        self.redirect_to_comment(source_comment, comment, submission)
+
+            # If there is no comment (automatic sub parsing) and the post wasn't deleted, and its not in the table, put
+            #   it in. This was a very specific issue and I'm not sure what the exact problem was, but this fixes it :)
+            if (source_comment is None and
+                    submission is not None and
+                    not self.database.submission_exists(submission.id)):
+                self.database.submission_insert(submission.id, submission.author.name, submission.title,
+                                                submission.url)
+                return
+            # Dont parse if it's already been parsed
+            if self.database.message_exists(source_comment.id):
+                return
+            else:
+                self.database.message_insert(source_comment.id, source_comment.author.name, "comment reply",
+                                             source_comment.body)
+                return
+
+        custom_title_exists = True if title is not None else False
+
+        return [url, submission, source_comment, custom_title_exists]
+
     def redirect_to_comment(self, source_comment, comment, submission):
         """
         Reply to `source_comment` with a link to `comment`
@@ -423,7 +488,7 @@ class TitleToImageBot(object):
         self.database.message_insert(source_comment.id, comment.author.name, "comment reply", source_comment.body)
 
     # noinspection PyUnusedLocal
-    def process_image_submission(self, submission, custom_title=None, commenter=None, customargs=None):
+    def process_image(self, title, url, subreddit, author, id, custom_title=None, commenter=None, customargs=None):
         """
         Process a submission that we know is a request for processing
 
@@ -444,27 +509,24 @@ class TitleToImageBot(object):
             pls = ""
 
         if custom_title:
-            parsed = self.database.submission_exists(submission.id + custom_title + pls)
+            parsed = self.database.submission_exists(id + custom_title + pls)
         else:
-            parsed = self.database.submission_exists(submission.id + pls)
-
-        subreddit = submission.subreddit.display_name
+            parsed = self.database.submission_exists(pls)
 
         if parsed:
             return None
 
         # Make sure author account exists
-        if submission.author is None:
-            self.database.submission_insert(submission.id, "deletedPost", submission.title, submission.url)
+        if author is None:
+            self.database.submission_insert(id, "deletedPost", title, url)
             return None
 
-        sub = submission.subreddit.display_name
-        url = submission.url
+        sub = subreddit
         if custom_title is not None:
             title = custom_title
         else:
-            title = submission.title
-        submission_author = submission.author.name
+            title = title
+        submission_author = author
 
         # We need to verify everything is good to go
         # Check every item in this list and verify it is 'True'
@@ -478,7 +540,7 @@ class TitleToImageBot(object):
             # Lets try this again.
             # noinspection PyBroadException
             try:
-                return self.process_gif(submission)
+                return self.process_gif(title, url, subreddit, author, id, custom_title, commenter, customargs)
             except Exception as ex:
                 logging.warning("gif upload failed with %s" % ex)
                 return None
@@ -521,7 +583,8 @@ class TitleToImageBot(object):
 
         return imgur_url
 
-    def process_gif(self, submission):
+    # noinspection PyUnusedLocal
+    def process_gif(self, title, url, subreddit, author, id, custom_title, commenter, customargs):
         """
 
         :param submission:
@@ -531,8 +594,6 @@ class TitleToImageBot(object):
         # TODO: Fix framerate issues
 
         # sub = submission.subreddit.display_name
-        url = submission.url
-        title = submission.title
         # author = submission.author.name
 
         # If its a gifv and hosted on imgur, we're ok, anywhere else I cant verify it works
@@ -612,7 +673,9 @@ class TitleToImageBot(object):
                 match.unwrap()
         twitpiclink = 'pic.twitter.com'
         nonfluff = str(cleaned).split(twitpiclink, 1)[0]
-        return [nonfluff]
+        img_cont = soup.select(".AdaptiveMedia-photoContainer img")
+        urls = re.findall('(?:(?:https?|ftp):\/\/)?[\w/\-?=%.]+\.[\w/\-?=%.]+', str(img_cont))
+        return [nonfluff, urls]
 
     def upload(self, reddit_image):
         """
@@ -1155,7 +1218,7 @@ class CLI(object):
         for i in range(starty, starty + 9):
             self.stdscr.addstr(i, startx, lines[num])
             num += 1
-        self.stdscr.addstr(starty+11, startx-15, 'Reddit Bot Interactive CLI by CalicoCatalyst')
+        self.stdscr.addstr(starty + 11, startx - 15, 'Reddit Bot Interactive CLI by CalicoCatalyst')
 
 
 def main():
