@@ -39,7 +39,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.0.4'
+__version__ = '1.1.0.5'
 
 
 class TitleToImageBot(object):
@@ -64,7 +64,7 @@ class TitleToImageBot(object):
 
         self.database = database
 
-    def run(self, limit):
+    def call_checks(self, limit):
         """
         Check messages, then check subreddits that have asked us to run on them.
 
@@ -1230,16 +1230,19 @@ def main():
     # noinspection PyBroadException
     try:
         if not args.loop:
-            bot.run(args.limit)
+            bot.call_checks(args.limit)
             interface.set_current_action_status('Checking Complete, Exiting Program', "")
             exit(0)
         while True:
-            bot.run(args.limit)
+            bot.call_checks(args.limit)
             interface.set_current_action_status('Checking Complete', "")
             time.sleep(args.interval)
     except KeyboardInterrupt:
         print("Command line debugging enabled")
-        # TODO: Clean this up w/ curses
+        # TODO: Clean this up w/ curse
+        curses.echo()
+        curses.nocbreak()
+        curses.endwin()
         while True:
             try:
                 command = raw_input(">>>    ")
@@ -1254,7 +1257,6 @@ def main():
         exit(0)
     except Exception:
         bot.reddit.redditor(bot.config.maintainer).message("bot crash", "Bot Crashed :p")
-    finally:
         curses.echo()
         curses.nocbreak()
         curses.endwin()
