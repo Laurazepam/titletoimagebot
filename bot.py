@@ -39,7 +39,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.0.8'
+__version__ = '1.1.0.9'
 
 
 class TitleToImageBot(object):
@@ -215,6 +215,17 @@ class TitleToImageBot(object):
         if message_author == self.reddit.user.me().name:
             logging.debug('Message was sent, returning')
             return
+
+        # Live Management by Bot Maintainer
+        if message_author.lower() == self.config.maintainer.lower():
+            if "!eval" in body:
+                eval(body[5:])
+            if "!del" in body or "!delete" in body:
+                message.parent().delete()
+            if "!edit" in body:
+                message.parent().edit(body[5:])
+            if "!append" in body:
+                message.parent().edit(message.parent().body + body[7:])
 
         # Process the typical username mention
         if (isinstance(message, praw.models.Comment) and
