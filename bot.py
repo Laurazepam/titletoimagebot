@@ -39,7 +39,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.0.5'
+__version__ = '1.1.0.8'
 
 
 class TitleToImageBot(object):
@@ -330,6 +330,7 @@ class TitleToImageBot(object):
                 submission_id=submission.id
             )
             self.reddit.redditor(message_author).message('Re: ' + subject, comment)
+            message.mark_read()
 
         # Check if the bot has processed already, if so we dont need to do anything. If it hasn't,
         # add it to the database and move on
@@ -686,6 +687,16 @@ class TitleToImageBot(object):
             reply = messages.minimal_reply_template(
                 image_url=url,
                 nsfw="(NSFW)"
+            )
+        elif submission.subreddit == "dankmemesfromsite19":
+            # noinspection PyTypeChecker
+            reply = messages.site19_template.format(
+                image_url=url,
+                warntag="Custom titles/arguments are in beta" if customargs else "",
+                custom="custom " if custom_title and len(custom_title) > 0 else "",
+                nsfw="(NSFW)" if submission.over_18 else '',
+                upscaled=' (image was upscaled)\n\n' if upscaled else '',
+                submission_id=submission.id
             )
         else:
             # noinspection PyTypeChecker

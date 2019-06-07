@@ -14,6 +14,19 @@ standard_reply_template = '''[Image with added {custom}title]({image_url}) {nsfw
 [^source](https://github.com/calicocatalyst/titletoimagebot) ^| 
 ^Fork ^of ^TitleToImageBot'''
 
+
+site19_template = '''[Image with [REDACTED] {custom}title]({image_url}) {nsfw}\n\n
+{upscaled}\n\n
+{warntag}\n\n
+---\n\n
+^Summon ^me ^with ^[REDACTED] ^| 
+[^church ^of ^peanut](http://reddit.com/r/churchofpeanut) ^| 
+[^Which ^SCP ^would ^you ^yiff ^and ^why ^is ^it ^1471](https://reddit.com/message/compose/?to=CalicoCatalyst&subject=feedback%20{submission_id}) ^| 
+[^source](https://github.com/calicocatalyst/titletoimagebot) ^| 
+^Fork ^of ^[REDACTED]'''
+
+
+
 minimal_reply_template = '[Processed Image]({image_url}) {nsfw}'
 
 banned_PM_template = '''[Here is your image request]({image_url}) {nsfw}\n\n
