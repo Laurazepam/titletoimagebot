@@ -39,7 +39,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.0.9'
+__version__ = '1.1.0.10'
 
 
 class TitleToImageBot(object):
@@ -288,6 +288,8 @@ class TitleToImageBot(object):
         elif 'bad bot' in body and len(body) < 12:
             logging.debug('Bad bot message or comment reply found, marking as read')
             message.mark_read()
+
+
         # BETA Private Messaging Parsing feature
 
         pm_process_triggers = ["add", "parse", "title", "image"]
@@ -709,6 +711,16 @@ class TitleToImageBot(object):
                 upscaled=' (image was upscaled)\n\n' if upscaled else '',
                 submission_id=submission.id
             )
+        elif submission.subreddit.lower() == "freefolk":
+            reply = messages.site19_template.format(
+                image_url=url,
+                warntag="Custom titles/arguments are in beta" if customargs else "",
+                custom="custom " if custom_title and len(custom_title) > 0 else "",
+                nsfw="(NSFW)" if submission.over_18 else '',
+                upscaled=' (image was upscaled)\n\n' if upscaled else '',
+                submission_id=submission.id
+            )
+            reply = reply + " ^| ^sEnTiENt"
         else:
             # noinspection PyTypeChecker
             reply = messages.standard_reply_template.format(
@@ -1090,6 +1102,7 @@ class CLI(object):
         self.redditstatus = "Not Connected"
         self.imgurstatus = "Not Connected"
         self.datastatus = "Not Connected"
+        self.loglvl = "Debug" if (logging.getLogger().level == logging.DEBUG) else "Standard"
         self.catx = self.cols - 36
         self.caty = 4
 
@@ -1122,6 +1135,7 @@ class CLI(object):
         self.stdscr.addstr(6, 0, "Reddit Status   : %s" % self.redditstatus)
         self.stdscr.addstr(7, 0, "Imgur Status    : %s" % self.imgurstatus)
         self.stdscr.addstr(9, 0, "Database Status : %s" % self.datastatus)
+        self.stdscr.addstr(10, 0, "Logging Mode    : %s" % self.loglvl)
         self.print_cat(self.catx, self.caty)
         self.stdscr.refresh()
 
@@ -1195,7 +1209,6 @@ def main():
     os.rename("logs/latest.log", "logs/logfile-" + current_timestamp + ".log")
 
     # Turn on debug mode with -d flag
-    # TODO: Figure out how to get this working with curses. Ideally, curses replaces it
     if args.debug:
         logging.basicConfig(filename="logs/latest.log", format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S',
                             level=logging.DEBUG)
