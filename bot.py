@@ -39,7 +39,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.0.10'
+__version__ = '1.1.0.11'
 
 
 class TitleToImageBot(object):
@@ -701,7 +701,7 @@ class TitleToImageBot(object):
                 image_url=url,
                 nsfw="(NSFW)"
             )
-        elif submission.subreddit == "dankmemesfromsite19":
+        elif submission.subreddit.display_name.lower() == "dankmemesfromsite19":
             # noinspection PyTypeChecker
             reply = messages.site19_template.format(
                 image_url=url,
@@ -711,7 +711,7 @@ class TitleToImageBot(object):
                 upscaled=' (image was upscaled)\n\n' if upscaled else '',
                 submission_id=submission.id
             )
-        elif submission.subreddit.lower() == "freefolk":
+        elif submission.subreddit.display_name.lower() == "freefolk":
             reply = messages.site19_template.format(
                 image_url=url,
                 warntag="Custom titles/arguments are in beta" if customargs else "",
