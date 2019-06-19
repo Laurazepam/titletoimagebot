@@ -39,7 +39,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.0.11'
+__version__ = '1.1.0.12'
 
 
 class TitleToImageBot(object):
@@ -288,7 +288,6 @@ class TitleToImageBot(object):
         elif 'bad bot' in body and len(body) < 12:
             logging.debug('Bad bot message or comment reply found, marking as read')
             message.mark_read()
-
 
         # BETA Private Messaging Parsing feature
 
@@ -712,7 +711,8 @@ class TitleToImageBot(object):
                 submission_id=submission.id
             )
         elif submission.subreddit.display_name.lower() == "freefolk":
-            reply = messages.site19_template.format(
+            # noinspection PyTypeChecker
+            reply = messages.standard_reply_template.format(
                 image_url=url,
                 warntag="Custom titles/arguments are in beta" if customargs else "",
                 custom="custom " if custom_title and len(custom_title) > 0 else "",
