@@ -18,6 +18,7 @@ import logging
 import os
 import re
 import sqlite3
+import threading
 import time
 from io import BytesIO
 from math import ceil
@@ -39,7 +40,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.0.12'
+__version__ = '1.1.1.3'
 
 
 class TitleToImageBot(object):
@@ -62,6 +63,7 @@ class TitleToImageBot(object):
         self.gfycat = self.config.get_gfycat_client_config()
         self.screen = screen
 
+        # get our custom BotDatabase object
         self.database = database
 
     def call_checks(self, limit):
@@ -71,12 +73,39 @@ class TitleToImageBot(object):
         :param limit: How far back in our posts should we go.
         :type limit: int
         """
+        # Most of this is for logging
+
+        # Set the curses (console) text
         self.screen.set_current_action_status('Checking Mentions', "")
+        # Log it to the file
         logging.info("Checking Mentions")
+        # Actually do it!
         self.check_mentions_for_requests(limit)
+
+        # Same stuff but for our listed auto-reply subs
         self.screen.set_current_action_status('Checking Autoreply Subs', "")
         logging.info("Checking Autoreply Subs")
         self.check_subs_for_posts(limit)
+
+    def read_comment_stream_for_manual_mentions(self):
+        for comment in self.reddit.subreddit('all').stream.comments():
+            if 'titletoimagebot' in comment.body:
+                processed = self.process_submission(comment.submission, comment, None,
+                                                    dm=False, request_body=comment.body, customargs=[])
+                if processed is not None:
+                    processed_url = processed[0]
+                    processed_submission = processed[1]
+                    processed_source_comment = processed[2]
+                    # processed_custom_title_exists = processed[3]
+                    self.reply_imgur_url(processed_url, processed_submission, processed_source_comment,
+                                         None, customargs=[])
+                else:
+                    pass
+
+    def start_comment_streaming_thread(self):
+        thread = threading.Thread(target=self.read_comment_stream_for_manual_mentions, args=())
+        thread.start()
+        self.screen.set_stream_status("Active")
 
     def check_mentions_for_requests(self, post_limit=10):
         """
@@ -85,7 +114,7 @@ class TitleToImageBot(object):
         :param post_limit: How far back should we go?
         :type post_limit: int
         """
-        # This is for the progress bar
+        # A majority of this is for the progress bar
         iteration = 1
         # Start the progress bar before we make the request.
         line = CLI.get_progress_line(iteration, post_limit)
@@ -93,17 +122,24 @@ class TitleToImageBot(object):
         for message in self.reddit.inbox.all(limit=post_limit):
             # If we're on the first one, show the progress bar not moving so we dont go over 100%
             if iteration is 1:
+                # Add an iteration to the progress bar
                 iteration = iteration + 1
+                # Get our "Line" aka progress bar
                 line = CLI.get_progress_line(1, post_limit + 1)
+                # Send the line to curses (live console) with the included action.
                 self.screen.set_current_action_status("Checking Inbox for requests", line)
             else:
                 iteration = iteration + 1
                 line = CLI.get_progress_line(iteration, post_limit + 1)
                 self.screen.set_current_action_status("Checking Inbox for requests", line)
+
+            # This is the actual function
             # noinspection PyBroadException
             try:
+                # Actually send the item in the inbox to the method to process it.
                 self.process_message(message)
             except Exception as ex:
+                # Broad catch to prevent freak cases from crashing program.
                 logging.info("Could not process %s with exception %s" % (message.id, ex))
 
     def check_subs_for_posts(self, post_limit=25):
@@ -120,30 +156,43 @@ class TitleToImageBot(object):
         totalits = len(subs) * post_limit
         iters = 0
         for sub in subs:
+            # Subreddit Object for API interaction
             subr = self.reddit.subreddit(sub)
+
+            # Grab posts from /new in sub to check
             for post in subr.new(limit=post_limit):
                 iters += 1
                 line = CLI.get_progress_line(iters, totalits)
+
+                # Update curses
                 self.screen.set_current_action_status("Checking Subs for posts", line)
 
+                # If we've already parsed, skip this post iteration.
                 if self.database.submission_exists(post.id):
                     continue
+
                 title = post.title
 
+                # does this sub have list of keywords in the title that trigger the bot on this sub
                 has_triggers = self.config.configfile.has_option(sub, 'triggers')
+                # does this sub have an upvote-before-parsing threshold
                 has_threshold = self.config.configfile.has_option(sub, 'threshold')
 
                 if has_triggers:
+                    # Get our list of triggers.
                     triggers = str(self.config.configfile[sub]['triggers']).split('|')
+                    # Skip if the title doesnt have one, but mark it as parsed.
                     if not any(t in title.lower() for t in triggers):
                         logging.debug('Title %s doesnt appear to contain any of %s, adding to parsed and skipping'
                                       % (title, self.config.configfile[sub]["triggers"]))
                         self.database.submission_insert(post.id, post.author.name, title, post.url)
                         continue
                 else:
+                    # No triggers so keep moving
                     logging.debug('No triggers were defined for %s, not checking' % sub)
 
                 if has_threshold:
+                    # Get the karma threshold
                     threshold = int(self.config.configfile[sub]['threshold'])
                     if post.score < threshold:
                         logging.debug('Threshold not met, not adding to parsed, just ignoring')
@@ -230,7 +279,8 @@ class TitleToImageBot(object):
         # Process the typical username mention
         if (isinstance(message, praw.models.Comment) and
                 (subject == 'username mention' or
-                 (subject == 'comment reply' and 'u/%s' % (self.config.bot_username.lower()) in body))):
+                 (subject == 'comment reply' and
+                  ('u/%s' % (self.config.bot_username.lower()) or 'titletoimagebot' in body)))):
 
             if message.author.name.lower() == 'automoderator':
                 message.mark_read()
@@ -960,7 +1010,7 @@ class BotDatabase(object):
 
     def __init__(self, db_filename, interface):
         self.interface = interface
-        self._sql_conn = sqlite3.connect(db_filename)
+        self._sql_conn = sqlite3.connect(db_filename, check_same_thread=False)
         self._sql = self._sql_conn.cursor()
 
     def cleanup(self):
@@ -1102,6 +1152,7 @@ class CLI(object):
         self.redditstatus = "Not Connected"
         self.imgurstatus = "Not Connected"
         self.datastatus = "Not Connected"
+        self.streamstatus = "Not Connected"
         self.loglvl = "Debug" if (logging.getLogger().level == logging.DEBUG) else "Standard"
         self.catx = self.cols - 36
         self.caty = 4
@@ -1123,17 +1174,23 @@ class CLI(object):
         self.datastatus = datastatus
         self.update_bot_status_info()
 
+    def set_stream_status(self, streamstatus):
+        self.streamstatus = streamstatus
+        self.update_bot_status_info()
+
     def update_bot_status_info(self):
         self.stdscr.refresh()
         self.clear_line(0)
         self.clear_line(5)
         self.clear_line(6)
         self.clear_line(7)
+        self.clear_line(8)
         self.clear_line(9)
         self.stdscr.addstr(0, 0, "Title2ImageBot Version %s by CalicoCatalyst" % __version__)
         self.stdscr.addstr(5, 0, "Reddit Username : %s" % self.reddituser)
         self.stdscr.addstr(6, 0, "Reddit Status   : %s" % self.redditstatus)
         self.stdscr.addstr(7, 0, "Imgur Status    : %s" % self.imgurstatus)
+        self.stdscr.addstr(8, 0, "Comment Stream  : %s" % self.streamstatus)
         self.stdscr.addstr(9, 0, "Database Status : %s" % self.datastatus)
         self.stdscr.addstr(10, 0, "Logging Mode    : %s" % self.loglvl)
         self.print_cat(self.catx, self.caty)
@@ -1246,6 +1303,7 @@ def main():
         interface.set_reddit_user("Could not connect")
         interface.set_reddit_status("Unable to authenticate with %s" % ex)
 
+    # This will test our connection to imgur servers by attempting to get an image I know exists. \
     # noinspection PyBroadException
     try:
         bot.imgur.get_image('S1jmapR')
@@ -1253,6 +1311,9 @@ def main():
     except Exception as ex:
         interface.set_imgur_status("Unable to connect with %s" % ex)
 
+    # This will test our connection to the database by getting a post i put in it for this purpose
+    # When creating a new database, you should add a submission titled "aaaaaa" for this purpose.
+    # TODO: find a less clunky method of doing this.
     # noinspection PyBroadException
     try:
         database.submission_exists("aaaaaa")
@@ -1268,10 +1329,13 @@ def main():
             bot.call_checks(args.limit)
             interface.set_current_action_status('Checking Complete, Exiting Program', "")
             exit(0)
+
+        bot.start_comment_streaming_thread()
         while True:
             bot.call_checks(args.limit)
             interface.set_current_action_status('Checking Complete', "")
             time.sleep(args.interval)
+
     except KeyboardInterrupt:
         print("Command line debugging enabled")
         # TODO: Clean this up w/ curse
@@ -1290,6 +1354,7 @@ def main():
         print("Cleaning up and exiting...")
         database.cleanup()
         exit(0)
+
     except Exception:
         bot.reddit.redditor(bot.config.maintainer).message("bot crash", "Bot Crashed :p")
         curses.echo()
