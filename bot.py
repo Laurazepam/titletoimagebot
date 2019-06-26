@@ -40,7 +40,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.1.3'
+__version__ = '1.1.1.5'
 
 
 class TitleToImageBot(object):
@@ -89,7 +89,7 @@ class TitleToImageBot(object):
 
     def read_comment_stream_for_manual_mentions(self):
         for comment in self.reddit.subreddit('all').stream.comments():
-            if 'titletoimagebot' in comment.body:
+            if 'u/titletoimagebot' in comment.body and comment.author.name is not 'Title2ImageBot':
                 processed = self.process_submission(comment.submission, comment, None,
                                                     dm=False, request_body=comment.body, customargs=[])
                 if processed is not None:
@@ -279,8 +279,7 @@ class TitleToImageBot(object):
         # Process the typical username mention
         if (isinstance(message, praw.models.Comment) and
                 (subject == 'username mention' or
-                 (subject == 'comment reply' and
-                  ('u/%s' % (self.config.bot_username.lower()) or 'titletoimagebot' in body)))):
+                 (subject == 'comment reply' and 'u/%s' % (self.config.bot_username.lower()) in body))):
 
             if message.author.name.lower() == 'automoderator':
                 message.mark_read()
