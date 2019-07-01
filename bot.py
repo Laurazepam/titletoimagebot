@@ -40,7 +40,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.1.5'
+__version__ = '1.1.1.7'
 
 
 class TitleToImageBot(object):
@@ -89,7 +89,10 @@ class TitleToImageBot(object):
 
     def read_comment_stream_for_manual_mentions(self):
         for comment in self.reddit.subreddit('all').stream.comments():
+
+            self.screen.set_stream_status("Scanning")
             if 'u/titletoimagebot' in comment.body and comment.author.name is not 'Title2ImageBot':
+                self.screen.set_stream_status("Responding to Comment")
                 processed = self.process_submission(comment.submission, comment, None,
                                                     dm=False, request_body=comment.body, customargs=[])
                 if processed is not None:
@@ -101,11 +104,24 @@ class TitleToImageBot(object):
                                          None, customargs=[])
                 else:
                     pass
+                self.screen.set_stream_status("Done :)")
+
+            if self.killthreads:
+                break
 
     def start_comment_streaming_thread(self):
         thread = threading.Thread(target=self.read_comment_stream_for_manual_mentions, args=())
+        self.killthreads = False
         thread.start()
+        self.thread = thread
         self.screen.set_stream_status("Active")
+
+    def stop_comment_streaming_thread(self):
+        self.killthreads = True
+
+        curses.echo()
+        curses.nocbreak()
+        curses.endwin()
 
     def check_mentions_for_requests(self, post_limit=10):
         """
@@ -1155,6 +1171,7 @@ class CLI(object):
         self.loglvl = "Debug" if (logging.getLogger().level == logging.DEBUG) else "Standard"
         self.catx = self.cols - 36
         self.caty = 4
+        self.killflag = False
 
     def set_reddit_user(self, reddituser):
         self.reddituser = reddituser
@@ -1178,6 +1195,11 @@ class CLI(object):
         self.update_bot_status_info()
 
     def update_bot_status_info(self):
+        if self.killflag:
+            # stop updating curses. I dont know whats calling this thread after things are done
+            # TODO: thread for normal loop as well
+            return
+
         self.stdscr.refresh()
         self.clear_line(0)
         self.clear_line(5)
@@ -1338,9 +1360,16 @@ def main():
     except KeyboardInterrupt:
         print("Command line debugging enabled")
         # TODO: Clean this up w/ curse
+
+        bot.stop_comment_streaming_thread()
         curses.echo()
         curses.nocbreak()
         curses.endwin()
+        interface.killflag = True
+        os.system('stty sane')
+        os.system('clear')
+        print('Interface and threads killed. Command line debugging enabled. Non-threaded functions still active\n')
+        print('Ctrl+C again to end the program.')
         while True:
             try:
                 command = raw_input(">>>    ")
@@ -1352,6 +1381,13 @@ def main():
         logging.debug("KeyboardInterrupt Detected, Cleaning up and exiting...")
         print("Cleaning up and exiting...")
         database.cleanup()
+
+        curses.echo()
+        curses.nocbreak()
+        curses.endwin()
+        os.system('stty sane')
+        os.system('clear')
+        os.system('clear')
         exit(0)
 
     except Exception:
