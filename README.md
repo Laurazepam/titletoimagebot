@@ -38,6 +38,13 @@ PM a link to a submission. Subject should be "parse"
 
 # Developer Stuff
 
+### Code / IDE
+
+This project is written in Pycharm IDE by IntelliJ, and honestly has only been made possible via their Open Source Licensing program.
+It includes comments that note different things to the inspector. I would highly reccomend using this IDE if you intend on working on this
+project, or just in general as it makes working with python feel as scalable as working with more industrial
+programming languages.
+
 ### Running the bot
 
 (Please dont try to run another bot unless /u/Title2ImageBot is shut down for good. Running it on your own sub is fine, but if you want DM me and I can set this one to automatically run on your sub)
