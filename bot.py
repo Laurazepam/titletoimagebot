@@ -79,20 +79,34 @@ class TitleToImageBot(object):
         self.screen.set_current_action_status('Checking Mentions', "")
         # Log it to the file
         logging.info("Checking Mentions")
-        # Actually do it!
+        #######################
+        #   CHECK MENTIONS    #
+        #######################
         self.check_mentions_for_requests(limit)
 
         # Same stuff but for our listed auto-reply subs
         self.screen.set_current_action_status('Checking Autoreply Subs', "")
         logging.info("Checking Autoreply Subs")
+
+        #######################
+        #     CHECK SUBS      #
+        #######################
         self.check_subs_for_posts(limit)
 
     def read_comment_stream_for_manual_mentions(self):
+
+        #######################
+        #  START STREAM LOOP  #
+        #######################
         for comment in self.reddit.subreddit('all').stream.comments():
 
             self.screen.set_stream_status("Scanning")
             if 'u/titletoimagebot' in comment.body and comment.author.name is not 'Title2ImageBot':
                 self.screen.set_stream_status("Responding to Comment")
+
+                #######################
+                #   PROCESS SUBMISS   #
+                #######################
                 processed = self.process_submission(comment.submission, comment, None,
                                                     dm=False, request_body=comment.body, customargs=[])
                 if processed is not None:
@@ -100,6 +114,9 @@ class TitleToImageBot(object):
                     processed_submission = processed[1]
                     processed_source_comment = processed[2]
                     # processed_custom_title_exists = processed[3]
+                    #######################
+                    #        REPLY        #
+                    #######################
                     self.reply_imgur_url(processed_url, processed_submission, processed_source_comment,
                                          None, customargs=[])
                 else:
@@ -110,6 +127,9 @@ class TitleToImageBot(object):
                 break
 
     def start_comment_streaming_thread(self):
+        #######################
+        #   CALL STREAM MTHD  #
+        #######################
         thread = threading.Thread(target=self.read_comment_stream_for_manual_mentions, args=())
         self.killthreads = False
         thread.start()
@@ -135,6 +155,10 @@ class TitleToImageBot(object):
         # Start the progress bar before we make the request.
         line = CLI.get_progress_line(iteration, post_limit)
         self.screen.set_current_action_status("Checking Inbox for requests", line)
+
+        #######################
+        #  START CHECK LOOP   #
+        #######################
         for message in self.reddit.inbox.all(limit=post_limit):
             # If we're on the first one, show the progress bar not moving so we dont go over 100%
             if iteration is 1:
@@ -153,7 +177,12 @@ class TitleToImageBot(object):
             # noinspection PyBroadException
             try:
                 # Actually send the item in the inbox to the method to process it.
+
+                #######################
+                #     PROCESS MSG     #
+                #######################
                 self.process_message(message)
+
             except Exception as ex:
                 # Broad catch to prevent freak cases from crashing program.
                 logging.info("Could not process %s with exception %s" % (message.id, ex))
@@ -166,6 +195,7 @@ class TitleToImageBot(object):
         :param post_limit: How far back in our posts should we go?
         :type post_limit: int
         """
+        # Get list of subs from the config
         subs = self.config.get_automatic_processing_subs()
 
         # Caluclate the total amount of posts to be parsed
@@ -217,12 +247,21 @@ class TitleToImageBot(object):
                         logging.debug('Threshold met, posting and adding to parsed')
                 else:
                     logging.debug('No threshold for %s, replying to everything :)' % sub)
+
+                #######################
+                #   PROCESS SUBMISS   #
+                #######################
                 processed = self.process_submission(post, None, None)
+
                 if processed is not None:
                     processed_url = processed[0]
                     processed_submission = processed[1]
                     processed_source_comment = processed[2]
                     # processed_custom_title_exists = processed[3]
+
+                    #######################
+                    #        REPLY        #
+                    #######################
                     self.reply_imgur_url(processed_url, processed_submission, processed_source_comment,
                                          None, customargs=None)
                 else:
@@ -329,6 +368,9 @@ class TitleToImageBot(object):
             else:
                 customargs = []
 
+            #######################
+            #   PROCESS SUBMIS.   #
+            #######################
             processed = self.process_submission(message.submission, message, title,
                                                 dm=False, request_body=body, customargs=customargs)
             if processed is not None:
@@ -336,6 +378,10 @@ class TitleToImageBot(object):
                 processed_submission = processed[1]
                 processed_source_comment = processed[2]
                 # processed_custom_title_exists = processed[3]
+
+                #######################
+                #        REPLY        #
+                #######################
                 self.reply_imgur_url(processed_url, processed_submission, processed_source_comment,
                                      title, customargs=customargs)
             else:
@@ -380,6 +426,9 @@ class TitleToImageBot(object):
                 else:
                     logging.debug('Found custom title: %s', title)
 
+            #######################
+            #   PROCESS PM SUBM   #
+            #######################
             parsed = self.process_submission(submission, None, title, True, request_body=body_original)
 
             processed = parsed
@@ -393,6 +442,9 @@ class TitleToImageBot(object):
                 custom_title = processed_custom_title_exists
                 upscaled = False
             else:
+                #######################
+                #   FALLBACK REPLIES  #
+                #######################
                 self.reddit.redditor(message_author).message("Sorry, I wasn't able to process that. This feature is in"
                                                              "beta and the conversation has been forwarded to the bot"
                                                              "author to see if a fix is possible.")
@@ -406,6 +458,9 @@ class TitleToImageBot(object):
                 upscaled=' (image was upscaled)\n\n' if upscaled else '',
                 submission_id=submission.id
             )
+            #######################
+            #    REPLY TO USER    #
+            #######################
             self.reddit.redditor(message_author).message('Re: ' + subject, comment)
             message.mark_read()
 
@@ -436,8 +491,15 @@ class TitleToImageBot(object):
         :type request_body:
         """
 
+        #######################
+        #    MAIN FUNCTION    #
+        #######################
         url = self.process_image_submission(submission=submission, custom_title=title, customargs=customargs)
 
+
+        #######################
+        #   DATABASE CHECKS   #
+        #######################
         if url is None:
 
             self.screen.set_current_action_status('URL returned as none.', "")
@@ -470,6 +532,9 @@ class TitleToImageBot(object):
                                              source_comment.body)
                 return
 
+        ######################
+        #       RETURN       #
+        ######################
         custom_title_exists = True if title is not None else False
         return [url, submission, source_comment, custom_title_exists]
 
@@ -488,6 +553,9 @@ class TitleToImageBot(object):
         reply = messages.already_responded_message.format(commentlink=com_url)
 
         try:
+            #######################
+            #    REPLY TO USER    #
+            #######################
             source_comment.reply(reply)
         except prawcore.exceptions.Forbidden:
             try:
@@ -529,11 +597,17 @@ class TitleToImageBot(object):
         subreddit = submission.subreddit.display_name
 
         if parsed:
+            #######################
+            #         BAIL        #
+            #######################
             return None
 
         # Make sure author account exists
         if submission.author is None:
             self.database.submission_insert(submission.id, "deletedPost", submission.title, submission.url)
+            #######################
+            #         BAIL        #
+            #######################
             return None
 
         sub = submission.subreddit.display_name
@@ -550,15 +624,25 @@ class TitleToImageBot(object):
         #   To post.
 
         if parsed:
+            #######################
+            #         BAIL        #
+            #######################
             return None
 
         if url.endswith('.gif') or url.endswith('.gifv'):
             # Lets try this again.
             # noinspection PyBroadException
             try:
+
+                #######################
+                #    PROCESS GIFS     #
+                #######################
                 return self.process_gif(submission)
             except Exception as ex:
                 logging.warning("gif upload failed with %s" % ex)
+                #######################
+                #         BAIL        #
+                #######################
                 return None
 
         # Attempt to grab the images
@@ -572,16 +656,25 @@ class TitleToImageBot(object):
                 img = Image.open(BytesIO(response.content))
             except (OSError, IOError) as error:
                 logging.error('Converting to image failed, skipping submission | %s', error)
+                #######################
+                #         BAIL        #
+                #######################
                 return None
         except Exception as error:
-            print(error)
-            print('Exception on image conversion lines.')
+            logging.error(error)
+            logging.error('Exception on image conversion lines.')
+            #######################
+            #         BAIL        #
+            #######################
             return None
         # noinspection PyBroadException
         try:
             image = RedditImage(img)
         except Exception as error:
-            print('Could not create RedditImage with %s' % error)
+            logging.error('Could not create RedditImage with %s' % error)
+            #######################
+            #         BAIL        #
+            #######################
             return None
 
         if subreddit == "boottoobig":
@@ -624,8 +717,8 @@ class TitleToImageBot(object):
             response = requests.get(url)
         # The nature of this throws tons of exceptions based on what users throw at the bot
         except Exception as error:
-            print(error)
-            print('Exception on image conversion lines.')
+            logging.error(error)
+            logging.error('Exception on image conversion lines.')
             return None
 
         img = Image.open(BytesIO(response.content))
@@ -668,6 +761,9 @@ class TitleToImageBot(object):
 
         # noinspection PyBroadException
         try:
+            ########################
+            #   UPLOAD TO GFYCAT   #
+            ########################
             url = self.upload_to_gfycat(path_gif).url
             remove(path_gif)
         except Exception as ex:
@@ -707,11 +803,13 @@ class TitleToImageBot(object):
         reddit_image.image.save(path_jpg)
         # noinspection PyBroadException
         try:
+            # Upload to imgur using pyimgur
             response = self.upload_to_imgur(path_png)
         except Exception as ex:
             # Likely too large
             logging.warning('png upload failed with %s, trying jpg' % ex)
             try:
+                # Upload to imgur using pyimgur
                 response = self.upload_to_imgur(path_jpg)
             except Exception as ex:
                 logging.error('jpg upload failed with %s, returning' % ex)
@@ -729,6 +827,7 @@ class TitleToImageBot(object):
         :return: Uploaded image object
         :rtype: pyimgur.Image
         """
+        # Actually call pyimgur and upload image with it
         self.screen.set_current_action_status("Uploading to Imgur...", "")
         self.screen.set_imgur_status("Uploading...")
         response = self.imgur.upload_image(local_image_url, title="Uploaded by /u/%s" % self.config.bot_username)
@@ -798,8 +897,14 @@ class TitleToImageBot(object):
             )
         try:
             if source_comment:
+                #######################
+                #        REPLY        #
+                #######################
                 source_comment.reply(reply)
             else:
+                #######################
+                #     REPLY TO SUB    #
+                #######################
                 submission.reply(reply)
         except praw.exceptions.APIException as error:
             logging.error('Reddit api error, we\'ll try to repost later | %s', error)
