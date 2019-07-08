@@ -28,6 +28,8 @@ import praw
 import praw.exceptions
 import praw.models
 import prawcore
+# Use my custom fork until https://github.com/Damgaard/PyImgur/pull/43 is merged.
+# pip3 install git+https://github.com/CalicoCatalyst/PyImgur
 import pyimgur
 import requests
 from PIL import Image, ImageSequence, ImageFont, ImageDraw
@@ -35,12 +37,13 @@ from bs4 import BeautifulSoup
 from gfypy import gfycat
 # noinspection PyProtectedMember
 from pip._vendor.distlib.compat import raw_input
+from pyimgur.request import ImgurException
 
 import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.1.7'
+__version__ = '1.1.2.2'
 
 
 class TitleToImageBot(object):
@@ -65,6 +68,8 @@ class TitleToImageBot(object):
 
         # get our custom BotDatabase object
         self.database = database
+        self.killthreads = False
+        self.thread = None
 
     def call_checks(self, limit):
         """
@@ -101,7 +106,7 @@ class TitleToImageBot(object):
         for comment in self.reddit.subreddit('all').stream.comments():
 
             self.screen.set_stream_status("Scanning")
-            if 'u/titletoimagebot' in comment.body and comment.author.name is not 'Title2ImageBot':
+            if 'u/titletoimagebot' in comment.body.lower() and comment.author.name is not 'Title2ImageBot':
                 self.screen.set_stream_status("Responding to Comment")
 
                 #######################
@@ -131,17 +136,17 @@ class TitleToImageBot(object):
         #   CALL STREAM MTHD  #
         #######################
         thread = threading.Thread(target=self.read_comment_stream_for_manual_mentions, args=())
-        self.killthreads = False
         thread.start()
         self.thread = thread
-        self.screen.set_stream_status("Active")
+        # self.screen.set_stream_status("Active")
 
     def stop_comment_streaming_thread(self):
-        self.killthreads = True
+        return
+        # self.killthreads = True
 
-        curses.echo()
-        curses.nocbreak()
-        curses.endwin()
+        # curses.echo()
+        # curses.nocbreak()
+        # curses.endwin()
 
     def check_mentions_for_requests(self, post_limit=10):
         """
@@ -496,7 +501,6 @@ class TitleToImageBot(object):
         #######################
         url = self.process_image_submission(submission=submission, custom_title=title, customargs=customargs)
 
-
         #######################
         #   DATABASE CHECKS   #
         #######################
@@ -805,13 +809,15 @@ class TitleToImageBot(object):
         try:
             # Upload to imgur using pyimgur
             response = self.upload_to_imgur(path_png)
-        except Exception as ex:
+        except ImgurException as ex:
+            logging.error('ImgurException: ' % ex)
             # Likely too large
             logging.warning('png upload failed with %s, trying jpg' % ex)
             try:
                 # Upload to imgur using pyimgur
                 response = self.upload_to_imgur(path_jpg)
-            except Exception as ex:
+            except ImgurException as ex:
+                logging.error('ImgurException: ' % ex)
                 logging.error('jpg upload failed with %s, returning' % ex)
                 return None
         finally:
@@ -874,17 +880,6 @@ class TitleToImageBot(object):
                 upscaled=' (image was upscaled)\n\n' if upscaled else '',
                 submission_id=submission.id
             )
-        elif submission.subreddit.display_name.lower() == "freefolk":
-            # noinspection PyTypeChecker
-            reply = messages.standard_reply_template.format(
-                image_url=url,
-                warntag="Custom titles/arguments are in beta" if customargs else "",
-                custom="custom " if custom_title and len(custom_title) > 0 else "",
-                nsfw="(NSFW)" if submission.over_18 else '',
-                upscaled=' (image was upscaled)\n\n' if upscaled else '',
-                submission_id=submission.id
-            )
-            reply = reply + " ^| ^sEnTiENt"
         else:
             # noinspection PyTypeChecker
             reply = messages.standard_reply_template.format(
@@ -895,6 +890,17 @@ class TitleToImageBot(object):
                 upscaled=' (image was upscaled)\n\n' if upscaled else '',
                 submission_id=submission.id
             )
+        if submission.subreddit.display_name in self.config.get_ban_sub_list():
+            reply = messages.banned_PM_template.format(
+                image_url=url,
+                warntag="Custom titles/arguments are in beta" if customargs else "",
+                custom="custom " if custom_title and len(custom_title) > 0 else "",
+                nsfw="(NSFW)" if submission.over_18 else '',
+                upscaled=' (image was upscaled)\n\n' if upscaled else '',
+                submission_id=submission.id
+            )
+            # If we're banned shoot this to the sub. rest of the stuff can run, it has no effect
+            source_comment.author.message("Your Title2ImageBot'd Image", reply)
         try:
             if source_comment:
                 #######################
@@ -1093,6 +1099,7 @@ class Configuration(object):
         sections.remove("MinimalList")
         sections.remove("ImgurAuth")
         sections.remove("Title2ImageBot")
+        sections.remove("BanList")
         return sections
 
     def get_user_ignore_list(self):
@@ -1106,6 +1113,12 @@ class Configuration(object):
         for i in self._config.items("MinimalList"):
             minimal_list.append(i[0])
         return minimal_list
+
+    def get_ban_sub_list(self):
+        ban_list = []
+        for i in self._config.items("BanList"):
+            ban_list.append(i[0])
+        return ban_list
 
     def get_gfycat_client_config(self):
         client_id = self._config['GfyCatAuth']['publicKey']
@@ -1296,8 +1309,9 @@ class CLI(object):
         self.update_bot_status_info()
 
     def set_stream_status(self, streamstatus):
-        self.streamstatus = streamstatus
-        self.update_bot_status_info()
+        return
+        # self.streamstatus = streamstatus
+        # self.update_bot_status_info()
 
     def update_bot_status_info(self):
         if self.killflag:
