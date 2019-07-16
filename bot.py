@@ -43,7 +43,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.2.5'
+__version__ = '1.1.2.6'
 
 
 class TitleToImageBot(object):
@@ -1286,7 +1286,7 @@ class CLI(object):
         self.streamstatus = "Not Connected"
         self.loglvl = "Debug" if (logging.getLogger().level == logging.DEBUG) else "Standard"
         self.catx = self.cols - 36
-        self.caty = 4
+        self.caty = 1
         self.killflag = False
 
     def set_reddit_user(self, reddituser):
