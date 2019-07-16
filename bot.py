@@ -43,7 +43,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.2.2'
+__version__ = '1.1.2.3'
 
 
 class TitleToImageBot(object):
@@ -135,15 +135,17 @@ class TitleToImageBot(object):
         #######################
         #   CALL STREAM MTHD  #
         #######################
+        self.screen.set_stream_status("Active")
         thread = threading.Thread(target=self.read_comment_stream_for_manual_mentions, args=())
+        thread.daemon = True
         thread.start()
         self.thread = thread
         # self.screen.set_stream_status("Active")
 
     def stop_comment_streaming_thread(self):
         return
-        # self.killthreads = True
-
+        self.killthreads = True
+        self.screen.set_stream_status("Disconnected")
         # curses.echo()
         # curses.nocbreak()
         # curses.endwin()
@@ -1309,9 +1311,8 @@ class CLI(object):
         self.update_bot_status_info()
 
     def set_stream_status(self, streamstatus):
-        return
-        # self.streamstatus = streamstatus
-        # self.update_bot_status_info()
+        self.streamstatus = streamstatus
+        self.update_bot_status_info()
 
     def update_bot_status_info(self):
         if self.killflag:
