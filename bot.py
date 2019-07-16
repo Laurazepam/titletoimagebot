@@ -43,7 +43,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.2.4'
+__version__ = '1.1.2.5'
 
 
 class TitleToImageBot(object):
@@ -105,9 +105,7 @@ class TitleToImageBot(object):
         #######################
         for comment in self.reddit.subreddit('all').stream.comments():
 
-            self.screen.set_stream_status("Scanning")
             if 'u/titletoimagebot' in comment.body.lower() and comment.author.name is not 'Title2ImageBot':
-                self.screen.set_stream_status("Responding to Comment")
 
                 #######################
                 #   PROCESS SUBMISS   #
@@ -126,7 +124,6 @@ class TitleToImageBot(object):
                                          None, customargs=[])
                 else:
                     pass
-                self.screen.set_stream_status("Done :)")
 
             if self.killthreads:
                 break
