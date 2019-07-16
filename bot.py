@@ -43,7 +43,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.2.6'
+__version__ = '1.1.2.7'
 
 
 class TitleToImageBot(object):
@@ -876,6 +876,16 @@ class TitleToImageBot(object):
                 custom="custom " if custom_title and len(custom_title) > 0 else "",
                 nsfw="(NSFW)" if submission.over_18 else '',
                 upscaled=' (image was upscaled)\n\n' if upscaled else '',
+                submission_id=submission.id
+            )
+        elif submission.subreddit.display_name.lower() == "de":
+            # noinspection PyTypeChecker
+            reply = messages.de_reply_template.format(
+                image_url=url,
+                warntag="" if customargs else "",
+                custom="anpassen " if custom_title and len(custom_title) > 0 else "",
+                nsfw="(NSFW)" if submission.over_18 else '',
+                upscaled=' (Das Bild wurde in der Größe geändert)\n\n' if upscaled else '',
                 submission_id=submission.id
             )
         else:

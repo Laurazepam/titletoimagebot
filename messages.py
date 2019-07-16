@@ -54,6 +54,17 @@ Summon me with /u/title2imagebot or by PM! |
 Fork of TitleToImageBot
 '''
 
+de_reply_template = '''[Bild mit hinzugefügtem {custom}Titel]({image_url}) {nsfw}\n\n
+{upscaled}\n\n
+{warntag}\n\n
+---\n\n
+^Rufen ^Sie ^mich ^mit ^/u/Title2ImageBot ^an ^oder ^senden ^Sie ^mir ^einen ^Link ^zu ^einem ^Beitrag ^mit 
+^dem ^Betreff ^"parse". ^| 
+[^Info](http://calicocat.live/t2ib) ^| 
+[^Schrei ^mich ^an ^oder ^hilf ^mir ^zu ^übersetzen](https://reddit.com/message/compose/?to=CalicoCatalyst&subject=feedback%20{submission_id}) ^| 
+[^Quellcode](https://github.com/calicocatalyst/titletoimagebot) ^| 
+^Git ^Fork ^aus ^TitleToImageBot'''
+
 gif_warning = "Gif processing is currently in alpha. There may be framerate issues if it does manage to parse"
 
 PM_options_warning = "PM processing is in beta and may not correctly process custom arguments"
