@@ -43,7 +43,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.2.3'
+__version__ = '1.1.2.4'
 
 
 class TitleToImageBot(object):
@@ -143,7 +143,6 @@ class TitleToImageBot(object):
         # self.screen.set_stream_status("Active")
 
     def stop_comment_streaming_thread(self):
-        return
         self.killthreads = True
         self.screen.set_stream_status("Disconnected")
         # curses.echo()
