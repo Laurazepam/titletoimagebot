@@ -101,7 +101,7 @@ useful.
 
 ### Loop function
 
-Most of thie program is designed around the `-l` flag being passed. It's made to run as a looping bot. While it will definitely
+Most of the program is designed around the `-l` flag being passed. It's made to run as a looping bot. While it will definitely
 function without it, it's not written for it, so be aware of this. 
 
 ## TODO:
