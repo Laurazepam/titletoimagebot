@@ -61,7 +61,7 @@ de_reply_template = '''[Bild mit hinzugefügtem {custom}Titel]({image_url}) {nsf
 ^Rufen ^Sie ^mich ^mit ^/u/Title2ImageBot ^an ^oder ^senden ^Sie ^mir ^einen ^Link ^zu ^einem ^Beitrag ^mit 
 ^dem ^Betreff ^"parse". ^| 
 [^Info](http://calicocat.live/t2ib) ^| 
-[^Schrei ^mich ^an ^oder ^hilf ^mir ^zu ^übersetzen](https://reddit.com/message/compose/?to=CalicoCatalyst&subject=feedback%20{submission_id}) ^| 
+[^Schrei ^mich ^an ^oder ^hilf ^mir ^zu ^übersetzen](https://reddit.com/message/compose/?to=CalicoCatalyst&subject=feedback) ^| 
 [^Quellcode](https://github.com/calicocatalyst/titletoimagebot) ^| 
 ^Git ^Fork ^aus ^TitleToImageBot'''
 

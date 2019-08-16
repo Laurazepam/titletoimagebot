@@ -43,7 +43,7 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.2.7'
+__version__ = '1.1.2.8'
 
 
 class TitleToImageBot(object):
@@ -863,7 +863,7 @@ class TitleToImageBot(object):
         """
 
         self.screen.set_current_action_status('Creating reply', "")
-        if submission.subreddit in self.config.get_minimal_sub_list():
+        if submission.subreddit.display_name.lower() in self.config.get_minimal_sub_list():
             reply = messages.minimal_reply_template(
                 image_url=url,
                 nsfw="(NSFW)"
@@ -885,8 +885,7 @@ class TitleToImageBot(object):
                 warntag="" if customargs else "",
                 custom="anpassen " if custom_title and len(custom_title) > 0 else "",
                 nsfw="(NSFW)" if submission.over_18 else '',
-                upscaled=' (Das Bild wurde in der Größe geändert)\n\n' if upscaled else '',
-                submission_id=submission.id
+                upscaled=' (Das Bild wurde in der Größe geändert)\n\n' if upscaled else ''
             )
         else:
             # noinspection PyTypeChecker
@@ -1516,8 +1515,8 @@ def main():
         os.system('clear')
         exit(0)
 
-    except Exception:
-        bot.reddit.redditor(bot.config.maintainer).message("bot crash", "Bot Crashed :p")
+    except Exception as ex:
+        bot.reddit.redditor(bot.config.maintainer).message("bot crash", "Bot Crashed :p %s" % ex)
         curses.echo()
         curses.nocbreak()
         curses.endwin()
