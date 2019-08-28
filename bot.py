@@ -38,12 +38,13 @@ from gfypy import gfycat
 # noinspection PyProtectedMember
 from pip._vendor.distlib.compat import raw_input
 from pyimgur.request import ImgurException
+from requests import HTTPError
 
 import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.2.8'
+__version__ = '1.1.2.10'
 
 
 class TitleToImageBot(object):
@@ -804,6 +805,7 @@ class TitleToImageBot(object):
         reddit_image.image.save(path_png)
         reddit_image.image.save(path_jpg)
         # noinspection PyBroadException
+        response = None
         try:
             # Upload to imgur using pyimgur
             response = self.upload_to_imgur(path_png)
@@ -815,12 +817,21 @@ class TitleToImageBot(object):
                 # Upload to imgur using pyimgur
                 response = self.upload_to_imgur(path_jpg)
             except ImgurException as ex:
-                logging.error('ImgurException: ' % ex)
+                logging.error('ImgurException: %s' % ex)
                 logging.error('jpg upload failed with %s, returning' % ex)
-                return None
+                response = None
+            except HTTPError as ex:
+                logging.error('HTTPError: %s' % ex)
+                logging.error('jpg upload failed with %s, returning' % ex)
+                response = None
+        except HTTPError as ex:
+            logging.error('HTTPError: %s' % ex)
+            logging.error('png upload failed with %s, returning' % ex)
         finally:
             remove(path_png)
             remove(path_jpg)
+        if response is None:
+            return None
         return response.link
 
     def upload_to_imgur(self, local_image_url):
