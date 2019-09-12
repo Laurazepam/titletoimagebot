@@ -36,7 +36,6 @@ from PIL import Image, ImageSequence, ImageFont, ImageDraw
 from bs4 import BeautifulSoup
 from gfypy import gfycat
 # noinspection PyProtectedMember
-from pip._vendor.distlib.compat import raw_input
 from pyimgur.request import ImgurException
 from requests import HTTPError
 
@@ -44,19 +43,26 @@ import messages
 
 __author__ = 'calicocatalyst'
 # [Major, e.g. a complete source code refactor].[Minor e.g. a large amount of changes].[Feature].[Patch]
-__version__ = '1.1.2.10'
+__version__ = '1.1.3.0'
 
 
 class TitleToImageBot(object):
-
+    """
+    Attributes:
+        config (Configuration): Bot Configuration Object
+        reddit (praw.Reddit): Reddit client object
+        imgur (PyImgur.Imgur): Imgur client object
+        gfycat (Gfycat.gfycat): Gfycat client object
+        screen (CLI): CLI interface object
+        killthreads (bool): Setting this to true will kill any active threads
+    """
     def __init__(self, config, database, screen):
-        """
-        Set our API variables for us to access
+        """Create the bot object
 
-        :param config: Configuration Object that stores a lot of variable info on how the bot runs
-        :type config: Configuration
-        :param database: Database that stores a list of parsed messages and submissions with some info
-        :type database: BotDatabase
+        Args:
+            config (Configuration): Bot configuration API object
+            database (BotDatabase): Bot database API object
+            screen (CLI): Bot CLI API object
         """
         # The conifugration has all of the usernames/passwords/keys.
         self.config = config
@@ -73,13 +79,11 @@ class TitleToImageBot(object):
         self.thread = None
 
     def call_checks(self, limit):
-        """
-        Check messages, then check subreddits that have asked us to run on them.
+        """Call the functions that check mentions and subs for requests
 
-        :param limit: How far back in our posts should we go.
-        :type limit: int
+        Args:
+            limit (int): How many posts back should be checked.
         """
-        # Most of this is for logging
 
         # Set the curses (console) text
         self.screen.set_current_action_status('Checking Mentions', "")
@@ -100,6 +104,11 @@ class TitleToImageBot(object):
         self.check_subs_for_posts(limit)
 
     def read_comment_stream_for_manual_mentions(self):
+        """Read a comment stream to check for all mentions of the old titletoimagebot
+
+        Returns:
+
+        """
 
         #######################
         #  START STREAM LOOP  #
@@ -130,6 +139,8 @@ class TitleToImageBot(object):
                 break
 
     def start_comment_streaming_thread(self):
+        """Start up the comment streaming thread
+        """
         #######################
         #   CALL STREAM MTHD  #
         #######################
@@ -141,6 +152,9 @@ class TitleToImageBot(object):
         # self.screen.set_stream_status("Active")
 
     def stop_comment_streaming_thread(self):
+        """Stop the comment streaming thread
+
+        """
         self.killthreads = True
         self.screen.set_stream_status("Disconnected")
         # curses.echo()
@@ -148,11 +162,11 @@ class TitleToImageBot(object):
         # curses.endwin()
 
     def check_mentions_for_requests(self, post_limit=10):
-        """
-        Check our inbox for any activity with PRAW and send it all to process_message to figure out what it is
+        """Check the bot inbox for username mentions / PMs
 
-        :param post_limit: How far back should we go?
-        :type post_limit: int
+        Args:
+            post_limit (int): How far back in the inbox should we look.
+
         """
         # A majority of this is for the progress bar
         iteration = 1
@@ -192,12 +206,11 @@ class TitleToImageBot(object):
                 logging.info("Could not process %s with exception %s" % (message.id, ex))
 
     def check_subs_for_posts(self, post_limit=25):
-        """
-        Check the subs listed in the config and send them to process_message
-        Additionally, make sure any special post requirements listed in the config for the auto-subs are satisfied
+        """Check autoprocess subs for posts that meet set requirements for sub
 
-        :param post_limit: How far back in our posts should we go?
-        :type post_limit: int
+        Args:
+            post_limit: How far back in the sub should we check
+
         """
         # Get list of subs from the config
         subs = self.config.get_automatic_processing_subs()
@@ -292,11 +305,10 @@ class TitleToImageBot(object):
                     self.database.submission_insert(post.id, post.author.name, title, post.url)
 
     def process_message(self, message):
-        """
-        Process given message (remove, feedback, mark good/bad bot as read)
+        """Process a detected username mention / DM
 
-        :param message: the inbox message, comment reply or username mention
-        :type message: praw.models.Message, praw.models.Comment
+        Args:
+            message (praw.models.Comment):  Message to process
         """
         if not message.author:
             return
@@ -478,21 +490,15 @@ class TitleToImageBot(object):
 
     # noinspection PyUnusedLocal
     def process_submission(self, submission, source_comment, title, dm=None, request_body=None, customargs=None):
-        """
-        Process Submission Using t2utils given the above args, and use the other
-            provided function to reply
+        """Send info to process_image_submission and handle errors that arise from that method.
 
-        :param customargs:
-        :param submission: Submission object containing image to parse
-        :type submission: praw.models.submission
-        :param source_comment: Comment that invoked if any did, may be NoneType
-        :type source_comment: praw.models.Comment, None
-        :param title: Custom title if any
-        :type title: String, None
-        :param dm:
-        :type dm:
-        :param request_body:
-        :type request_body:
+        Args:
+            submission (praw.models.Submission): Post to process
+            source_comment (praw.models.Comment): Comment that summoned bot
+            title (str): Title to add to the image
+            dm (Optional[Any]): Unused variable
+            request_body (str): Unusued; Body of the request
+            customargs (list[str]): Custom arguments
         """
 
         #######################
@@ -542,15 +548,13 @@ class TitleToImageBot(object):
         return [url, submission, source_comment, custom_title_exists]
 
     def redirect_to_comment(self, source_comment, comment, submission):
-        """
-        Reply to `source_comment` with a link to `comment`
+        """If a user isn't the first to ask for the bot to process, redirect them to the first asker
 
-        :type source_comment: praw.models.Comment
-        :param source_comment: Comment we're replying to
-        :type comment: praw.models.Comment
-        :param comment: Our comment that we're going to redirect them to
-        :param submission: The submission that its under (needed to link to the comment)
-        :type submission: praw.models.Submission
+        Args:
+            source_comment (praw.models.Comment): Comment that is currently asking
+            comment (praw.models.Comment): Comment to redirect said user to
+            submission (praw.models.Submission): Submission the post is on (for link generation purposes)
+
         """
         com_url = messages.comment_url.format(postid=submission.id, commentid=comment.id)
         reply = messages.already_responded_message.format(commentlink=com_url)
@@ -573,19 +577,16 @@ class TitleToImageBot(object):
 
     # noinspection PyUnusedLocal
     def process_image_submission(self, submission, custom_title=None, commenter=None, customargs=None):
-        """
-        Process a submission that we know is a request for processing
+        """Process an image submission
 
-        :param custom_title: Custom Title to parse
-        :type custom_title: str
-        :param submission: Submission that points to a URL we need to process
-        :type submission: praw.models.Submission
-        :param commenter: Commenter who requested the thing
-        :type commenter: praw.models.Redditor
-        :param customargs: List of custom arguments. Not implemented, but lets be ready for it once we figure out how
-        :type customargs: list
-        :return: URL the image has been uploaded to, None if it failed to upload
-        :rtype: String, None
+        Args:
+            submission (praw.models.Submission): Submission to process
+            custom_title (str): Custom title to be potentially added
+            commenter (str): Name of the person who commented. I dont think this is ever used
+            customargs (list[str]): Custom arguments to process
+
+        Returns:
+            Imgur URL
         """
         if customargs:
             pls = ''.join(customargs)
@@ -696,13 +697,24 @@ class TitleToImageBot(object):
         return imgur_url
 
     def process_gif(self, submission):
+        """Process a gif.
+
+        Notes:
+            This is ineffecient and awful. I need to either research and get familiar with animated picture processing
+            in python or call up on the expertise of someone experienced in the area; Also considering building a
+            library to do so in a better/more suitable language and calling it as a subprocess, which would work great
+            as well
+
+            See my GfyPy project for information on how that library works.
+
+        Args:
+            submission (praw.models.Submission): Submission to process
+
+        Returns:
+            Gfycat URL
         """
 
-        :param submission:
-        :type submission: praw.models.Submission
-        """
-
-        # TODO: Fix framerate issues
+        # TODO: hotfix framerate issues
 
         # sub = submission.subreddit.display_name
         url = submission.url
@@ -728,6 +740,8 @@ class TitleToImageBot(object):
         frames = []
 
         # Process Gif
+        # We do this by creating a reddit image for every frame of the gif
+        # This is godawful, but the impact on performance isn't too bad
 
         # Loop over each frame in the animated image
         for frame in ImageSequence.Iterator(img):
@@ -778,6 +792,18 @@ class TitleToImageBot(object):
 
     @staticmethod
     def get_params_from_twitter(link):
+        """ Get the paramaters that we shove into process_image_submission from a twitter link.
+
+        Unfinished
+
+        TODO: REWORK HOW PROCESS_IMAGE_SUBMISSION WORKS TO ALLOW IT TO NOT NEED TO USE PRAW MODELS
+
+        Args:
+            link:
+
+        Returns:
+
+        """
         page = requests.get(link)
         soup = BeautifulSoup(page.text, 'html.parser')
         tweet_text = soup.select(".tweet-text")
@@ -835,12 +861,19 @@ class TitleToImageBot(object):
         return response.link
 
     def upload_to_imgur(self, local_image_url):
-        """
+        """Upload an image to imgur from a local image url
 
-        :param local_image_url: local url of the image. Usually temp.jpg or temp.png
-        :type local_image_url: str
-        :return: Uploaded image object
-        :rtype: pyimgur.Image
+        Make sure to use my fork of PyImgur or errors will not be raised when image upload fails. The public PyImgur
+        instead prints to console when it fails.
+
+        Args:
+            local_image_url (str): Path to local file
+
+        Returns:
+            Response from imgur.
+
+        Raises:
+            ImgurException: when image upload fails for whatever reason.
         """
         # Actually call pyimgur and upload image with it
         self.screen.set_current_action_status("Uploading to Imgur...", "")
@@ -851,26 +884,30 @@ class TitleToImageBot(object):
         return response
 
     def upload_to_gfycat(self, local_gif_url):
+        """Upload a local gif by path to gfycat
+
+        Args:
+            local_gif_url: path to gif
+
+        Returns:
+            GfyCat object
+        """
         generated_gfycat = self.gfycat.upload_file(local_gif_url)
         return generated_gfycat
 
     def reply_imgur_url(self, url, submission, source_comment, custom_title=None, upscaled=False, customargs=None):
-        """
-        Send the reply with PRAW to the user who requested, or the submission if its auto
+        """Reply to a comment with the imgur url generated
 
-        :param customargs:
-        :type custom_title: object
-        :param custom_title:
-        :param upscaled: If the image is below 500x500px it gets upscaled,
-        :type upscaled: bool
-        :param url: Imgur Url the titled image was uploaded to
-        :type url: str
-        :param submission: Submission that the post was on. Reply if source_comment = False
-        :type submission: praw.models.Submission
-        :param source_comment: Comment that invoked bot if it exists
-        :type source_comment: praw.models.Comment
-        :returns: True on success, False on failure
-        :rtype: bool
+        Args:
+            url (str): URL that was generated
+            submission (praw.models.Submission): Submission that was processed
+            source_comment (praw.models.Comment): Comment that requested processing
+            custom_title (str): Custom title if it was added
+            upscaled (bool): Whether image was upscaled for processing
+            customargs (list[str]): List of custom arguments if any were passed
+
+        Returns:
+            True if reply succeeded, false otherwise
         """
 
         self.screen.set_current_action_status('Creating reply', "")
@@ -952,11 +989,19 @@ class TitleToImageBot(object):
 
 
 class RedditImage:
-    """RedditImage class
+    """Reddit Image class
 
-    :param image: the image
-    :type image: PIL.Image.Image
+    A majority of this class is the work of gerenook, the author of the original bot. Its ingenious work, and
+    the bot absolutely could not function without it. Anything dumb here is my (CalicoCatalyst) work.
+    custom arguments are my work.
+    I'm going to do my best to document it.
+
+    Attributes:
+        image (Image): PIL.Image object. Once methods are ran, will contain the output as well.
+        upscaled (bool): Was the image upscaled?
+        title (str): Title we add to the image
     """
+
     margin = 10
     min_size = 500
     # font_file = 'seguiemj.ttf'
@@ -966,9 +1011,18 @@ class RedditImage:
     regex_resolution = re.compile(r'\s?\[[0-9]+\s?[xX*×]\s?[0-9]+\]')
 
     def __init__(self, image):
+        """Create an image object, and pass an image file to it. The RedditImage object then allows us to modify it.
+
+        This should be an `extends Image` reeeeee
+
+        Args:
+            image (Optional[any]): Image to be processed
+        """
+
         self.image = image
         self.upscaled = False
         self.title = ""
+
         width, height = image.size
         # upscale small images
         if image.size < (self.min_size, self.min_size):
@@ -987,15 +1041,22 @@ class RedditImage:
         )
 
     def __str__(self):
+        """ Return the title of the image
+
+        Returns:
+            Title of the image.
+        """
         return self.title
 
     def _split_title(self, title):
-        """Split title on [',', ';', '.'] into multiple lines
+        """ Split the title into different lines for certain subreddits
 
-        :param title: the title to split
-        :type title: str
-        :returns: split title
-        :rtype: list[str]
+        Args:
+            title (str): Title to split
+
+        Returns:
+            Title that's been split
+
         """
         lines = ['']
         all_delimiters = [',', ';', '.']
@@ -1021,12 +1082,13 @@ class RedditImage:
         return [line for line in lines if line]
 
     def _wrap_title(self, title):
-        """Wrap title
+        """Actually wrap the title.
 
-        :param title: the title to wrap
-        :type title: str
-        :returns: wrapped title
-        :rtype: list
+        Args:
+            title: Title to wrap
+
+        Returns:
+            Wrapped title
         """
         lines = ['']
         line_words = []
@@ -1042,20 +1104,21 @@ class RedditImage:
         return [line for line in lines if line]
 
     def add_title(self, title, boot, bg_color='#fff', text_color='#000', customargs=None, author=None):
-        """Add title to new whitespace on image
+        """Add the title to an image
 
-        :param author: Author of the submission
-        :type author: str
-        :param customargs: List of custom arguments to parse
-        :type customargs: list
-        :param text_color:
-        :param bg_color:
-        :param title: the title to add
-        :type title: str
-        :param boot: if True, split title on [',', ';', '.'], else wrap text
-        :type boot: bool
+        return function is not used.
+
+        Args:
+            title (str): The title to add
+            boot (bool): Is this a bootTooBig post
+            bg_color (str): Background of the title section
+            text_color (str): Foreground (text) color
+            customargs (str): Custom arguments passed to the image parser
+            author (str): Author of the submission
+
+        Returns:
+            Edited image
         """
-
         self.title = title
 
         title_centering = False
@@ -1098,11 +1161,22 @@ class RedditImage:
                       author, text_color, self._font_title)
         self._width, self._height = new.size
         self.image = new
-
+        return self.image
 
 class Configuration(object):
+    """
+    Attributes:
+        configfile (ConfigParser): Configuration Parser
+        maintainer (str): Reddit Username of the bot maintainer.
+        bot_username (str): Reddit Username of the bot
+    """
 
     def __init__(self, config_file):
+        """Interface for interacting with the bot's config file.
+
+        Args:
+            config_file (str): Name of the config file.
+        """
         self._config = configparser.ConfigParser()
         self._config.read(config_file)
         self.configfile = self._config
@@ -1110,6 +1184,15 @@ class Configuration(object):
         self.bot_username = self._config['RedditAuth']['username']
 
     def get_automatic_processing_subs(self):
+        """Return the subreddits that should be automatically processed
+
+        In the bot configuration file, there are configuration sections. Any other sections are subs to automatically
+        parse. So here, we remove the config sections and return an array of the rest
+
+        Returns:
+            List of subs to automatically parse.
+
+        """
         sections = self._config.sections()
         sections.remove("RedditAuth")
         sections.remove("GfyCatAuth")
@@ -1121,24 +1204,51 @@ class Configuration(object):
         return sections
 
     def get_user_ignore_list(self):
+        """Get list of users to ignore
+
+        Typically this is bots that pester this bot (accidentally).
+
+        Returns:
+            List of usernames to ignore
+        """
         ignore_list = []
         for i in self._config.items("IgnoreList"):
             ignore_list.append(i[0])
         return ignore_list
 
     def get_minimal_sub_list(self):
+        """Get list of subs to use the minimal response format on
+
+        Tons of issues with long responses, links to usernames, formatted links, on some subs.
+
+        Returns:
+            List of minimal-format subs
+
+        """
         minimal_list = []
         for i in self._config.items("MinimalList"):
             minimal_list.append(i[0])
         return minimal_list
 
     def get_ban_sub_list(self):
+        """Get list of subs to ignore completely
+
+        Returns:
+            List of subs to ignore
+
+        """
         ban_list = []
         for i in self._config.items("BanList"):
             ban_list.append(i[0])
         return ban_list
 
     def get_gfycat_client_config(self):
+        """Generate the gfycat client with the info in the config
+
+        Returns:
+            Gfycat client
+
+        """
         client_id = self._config['GfyCatAuth']['publicKey']
         client_secret = self._config['GfyCatAuth']['privateKey']
         username = self._config['GfyCatAuth']['username']
@@ -1147,6 +1257,12 @@ class Configuration(object):
         return client
 
     def auth_reddit_from_config(self):
+        """Generate the reddit client with the info in the config
+
+        Returns:
+            praw Reddit object
+
+        """
         return (praw.Reddit(client_id=self._config['RedditAuth']['publicKey'],
                             client_secret=self._config['RedditAuth']['privateKey'],
                             username=self._config['RedditAuth']['username'],
@@ -1154,73 +1270,134 @@ class Configuration(object):
                             user_agent=self._config['RedditAuth']['userAgent']))
 
     def get_imgur_client_config(self):
+        """Generate the imgur client from the info in the config
+
+        Returns:
+            PyImgur client.
+
+        """
         return pyimgur.Imgur(self._config['ImgurAuth']['publicKey'])
 
 
 class BotDatabase(object):
-
+    """Interface for the SQLite 3 Database that stores processed comments/submissions
+    """
     def __init__(self, db_filename, interface):
-        self.interface = interface
+        """Interface for the SQLite 3 Database that stores processed comments/submissions
+
+        Args:
+            db_filename (str): Filename of the SQLite 3 database
+            interface (CLI): CLI for the bot to allow live updates.
+        """
+        self._interface = interface
         self._sql_conn = sqlite3.connect(db_filename, check_same_thread=False)
         self._sql = self._sql_conn.cursor()
 
     def cleanup(self):
+        """Clean up SQL connections before quitting the program.
+        """
         self._sql_conn.commit()
         self._sql_conn.close()
 
     def message_exists(self, message_id):
         """Check if message exists in messages table
 
-        :param message_id: the message id to check
-        :type message_id: str
-        :returns: True if message was found, else False
-        :rtype: bool
+        Args:
+            message_id (str): ID of the message to check.
+
+        Returns:
+            True if it exists in the database, False otherwise.
         """
-        self.interface.set_data_status("Querying...")
+        self._interface.set_data_status("Querying...")
         self._sql.execute('SELECT EXISTS(SELECT 1 FROM messages WHERE id=?)', (message_id,))
-        self.interface.set_data_status("Connected")
+        self._interface.set_data_status("Connected")
         if self._sql.fetchone()[0]:
             return True
         else:
             return False
 
-    def submission_exists(self, message_id):
-        self.interface.set_data_status("Querying...")
-        self._sql.execute('SELECT EXISTS(SELECT 1 FROM submissions WHERE id=?)', (message_id,))
-        self.interface.set_data_status("Connected")
+    def submission_exists(self, submission_id):
+        """Check if submission exists in submissions table
+
+        Args:
+            submission_id (str): ID of submission to check
+
+        Returns:
+            True if submission exists in database, False otherwise
+        """
+        self._interface.set_data_status("Querying...")
+        self._sql.execute('SELECT EXISTS(SELECT 1 FROM submissions WHERE id=?)', (submission_id,))
+        self._interface.set_data_status("Connected")
         if self._sql.fetchone()[0]:
             return True
         else:
             return False
 
     def message_parsed(self, message_id):
-        self.interface.set_data_status("Querying...")
+        """Check if message was parsed.
+
+        Notes:
+            This is unused, as there is currently not a way to set the parsed flag, which this checks.
+            *However,* a message will not be added until it is parsed. In this version of the bot, it can
+            be checked using the `message_exists()` function.
+
+            This is simply a left-over function
+            from the previous developer's work that I included for the sake of including it. I'll leave it in
+            just in case it is ever needed in the future
+
+        Warnings:
+            Check if the passed message ID exists before calling this, as this method does not do so.
+
+        Args:
+            message_id (str): ID of message to check
+
+        Returns:
+            True if the parsed flag is set for a message, False otherwise
+        """
+        self._interface.set_data_status("Querying...")
         self._sql.execute('SELECT EXISTS(SELECT 1 FROM messages WHERE id=? AND parsed=1)', (message_id,))
-        self.interface.set_data_status("Connected")
+        self._interface.set_data_status("Connected")
         if self._sql.fetchone()[0]:
             return True
         else:
             return False
 
     def message_insert(self, message_id, message_author, subject, body):
-        self.interface.set_data_status("Querying...")
-        """Insert message into messages table"""
+        """Insert message once it has been parsed, along with some other info about it, into messages table
+
+        Args:
+            message_id (str): Message ID (main key)
+            message_author (str): Author of message
+            subject (str): Subject of the message, will be the type of message recieved
+            body (str): Contents of the comment/message/whatever
+
+        """
+        self._interface.set_data_status("Querying...")
         self._sql.execute('INSERT INTO messages (id, author, subject, body) VALUES (?, ?, ?, ?)',
                           (message_id, message_author, subject, body))
         self._sql_conn.commit()
-        self.interface.set_data_status("Connected")
+        self._interface.set_data_status("Connected")
 
     def submission_select(self, submission_id):
-        """Select all attributes of submission
-        :param submission_id: the submission id
-        :type submission_id: str
-        :returns: query result, None if id not found
-        :rtype: dict, NoneType
+        """Return a database of information about a submission from the submissions table.
+
+        Args:
+            submission_id (str): ID of the submission
+
+        Returns:
+            {
+                'id': ID of the submission,
+                'author': Author of the submission,
+                'title': Title of the submission,
+                'url': Reddit URL of the submission,
+                'imgur_url': Imgur URL that the parsed submission was uploaded to,
+                'retry': Retry flag (leftover, useless)
+                'timestamp': Timestamp of the post.}
         """
-        self.interface.set_data_status("Querying...")
+        self._interface.set_data_status("Querying...")
         self._sql.execute('SELECT * FROM submissions WHERE id=?', (submission_id,))
         result = self._sql.fetchone()
-        self.interface.set_data_status("Connected")
+        self._interface.set_data_status("Connected")
         if not result:
             return None
         return {
@@ -1234,62 +1411,92 @@ class BotDatabase(object):
         }
 
     def submission_insert(self, submission_id, submission_author, title, url):
-        self.interface.set_data_status("Querying...")
+        """Insert a submission into the submission database
+
+        Args:
+            submission_id (str): ID of the submission (main key)
+            submission_author (str): Author of the submission
+            title (str): Title of the submission
+            url (str): Reddit URL of the submission
+
+        """
+        self._interface.set_data_status("Querying...")
         """Insert submission into submissions table"""
         self._sql.execute('INSERT INTO submissions (id, author, title, url) VALUES (?, ?, ?, ?)',
                           (submission_id, submission_author, title, url))
         self._sql_conn.commit()
-        self.interface.set_data_status("Connected")
+        self._interface.set_data_status("Connected")
 
     def submission_set_retry(self, submission_id, delete_message=False, message=None):
-        """Set retry flag for given submission, delete message from db if desired
-        :param submission_id: the submission id to set retry
-        :type submission_id: str
-        :param delete_message: if True, delete message from messages table
-        :type delete_message: bool
-        :param message: the message to delete
-        :type message: praw.models.Comment, NoneType
+        """Set retry flag on database
+
+        Args:
+            submission_id:
+            delete_message:
+            message:
+
+        Notes:
+            Unused. Set retry flag when a submission isn't able to be uploaded.
+
+        TODO:
+            Actually use this
+
+        Raises:
+            TypeError: If delete_message is true, the message needs to be passed.
         """
-        self.interface.set_data_status("Querying...")
+        self._interface.set_data_status("Querying...")
         self._sql.execute('UPDATE submissions SET retry=1 WHERE id=?', (submission_id,))
         if delete_message:
             if not message:
                 raise TypeError('If delete_message is True, message must be set')
             self._sql.execute('DELETE FROM messages WHERE id=?', (message.id,))
         self._sql_conn.commit()
-        self.interface.set_data_status("Connected")
+        self._interface.set_data_status("Connected")
 
     def submission_clear_retry(self, submission_id):
-        """Clear retry flag for given submission_id
-        :param submission_id: the submission id to clear retry
-        :type submission_id: str
+        """Clear retry flag on database.
+
+        Args:
+            submission_id (str): ID of the submission
+
         """
-        self.interface.set_data_status("Querying...")
+        self._interface.set_data_status("Querying...")
         self._sql.execute('UPDATE submissions SET retry=0 WHERE id=?', (submission_id,))
         self._sql_conn.commit()
-        self.interface.set_data_status("Connected")
+        self._interface.set_data_status("Connected")
 
     def submission_set_imgur_url(self, submission_id, imgur_url):
-        """Set imgur url for given submission
-        :param submission_id: the submission id to set imgur url
-        :type submission_id: str
-        :param imgur_url: the imgur url to update
-        :type imgur_url: str
+        """Set imgur url for a submission
+
+        Notes:
+            Not currently used.
+
+        Args:
+            submission_id (str): Submission ID
+            imgur_url (str): IMGUR url to set
         """
-        self.interface.set_data_status("Querying...")
+        self._interface.set_data_status("Querying...")
         self._sql.execute('UPDATE submissions SET imgur_url=? WHERE id=?',
                           (imgur_url, submission_id))
         self._sql_conn.commit()
-        self.interface.set_data_status("Connected")
+        self._interface.set_data_status("Connected")
 
 
 class CLI(object):
+    """NCurses interface for ease of management
+
+    Attributes:
+        reddituser (str): Name of the user the bot logs in with
+        redditstatus (str): Status of the connection to reddit servers
+        imgurstatus (str): Status of the connection to imgur servers
+        datastatus (str): Status of the connection to the SQLite database
+        streamstatus (str): Status of the comment psuedostream.
+        loglvl (str): Logging level for the bot logs
+        killflag (bool): If this is true, stuff will stop updating.
+    """
 
     def __init__(self):
-        """
-        Initialize our command line interface.
-
-        If you want to clean up everything related to this please do because I hate it
+        """ncurses interface for ease of management.
         """
 
         self.stdscr = curses.initscr()
@@ -1305,32 +1512,62 @@ class CLI(object):
         self.datastatus = "Not Connected"
         self.streamstatus = "Not Connected"
         self.loglvl = "Debug" if (logging.getLogger().level == logging.DEBUG) else "Standard"
-        self.catx = self.cols - 36
-        self.caty = 1
+        self._catx = self.cols - 36
+        self._caty = 1
         self.killflag = False
 
     def set_reddit_user(self, reddituser):
+        """Set the reddit user and update CLI
+
+        Args:
+            reddituser (str): username
+
+        """
         self.reddituser = reddituser
         self.update_bot_status_info()
 
     def set_reddit_status(self, redditstatus):
+        """Set the status of the reddit connection and update CLI
+
+        Args:
+            redditstatus (str): status of reddit connection
+        """
         self.redditstatus = redditstatus
         self.update_bot_status_info()
 
     def set_imgur_status(self, imgurstatus):
-        # TODO: Proper global imgur rate limit handling
+        """Set the status of the imgur connection and update CLI
+
+        Args:
+            imgurstatus (str): status of imgur connection
+        """
         self.imgurstatus = imgurstatus
         self.update_bot_status_info()
 
     def set_data_status(self, datastatus):
+        """Set the status of the database connection and update CLI
+
+        Args:
+            datastatus (str): status of database connection
+        """
         self.datastatus = datastatus
         self.update_bot_status_info()
 
     def set_stream_status(self, streamstatus):
+        """Set the status of the comment stream and update CLI
+
+        Warnings:
+            Do not access this method from inside a different thread. The CLI will slowly glitch out and be unusable.
+
+        Args:
+            streamstatus (str): status of stream connection
+        """
         self.streamstatus = streamstatus
         self.update_bot_status_info()
 
     def update_bot_status_info(self):
+        """Update the entire CLI view.
+        """
         if self.killflag:
             # stop updating curses. I dont know whats calling this thread after things are done
             # TODO: thread for normal loop as well
@@ -1350,21 +1587,25 @@ class CLI(object):
         self.stdscr.addstr(8, 0, "Comment Stream  : %s" % self.streamstatus)
         self.stdscr.addstr(9, 0, "Database Status : %s" % self.datastatus)
         self.stdscr.addstr(10, 0, "Logging Mode    : %s" % self.loglvl)
-        self.print_cat(self.catx, self.caty)
+        self.print_cat(self._catx, self._caty)
         self.stdscr.refresh()
 
     @staticmethod
     def get_progress_line(iteration, total, prefix='', suffix='', decimals=1, bar_length=25):
+        """Generate a progress line. Credit to some guy on stackoverflow, lost the link
+
+        Args:
+            iteration (int): Iteration out of total
+            total (int): Total amount of iterations
+            prefix (str): Prefix of the string
+            suffix (str): Suffix of the string
+            decimals (int): How many decimals to count
+            bar_length (int): Length of characters for bar
+
+        Returns:
+            The progress bar created.
         """
-        Call in a loop to create terminal progress bar
-        @params:
-            iteration   - Required  : current iteration (Int)
-            total       - Required  : total iterations (Int)
-            prefix      - Optional  : prefix string (Str)
-            suffix      - Optional  : suffix string (Str)
-            decimals    - Optional  : positive number of decimals in percent complete (Int)
-            bar_length  - Optional  : character length of bar (Int)
-        """
+
         str_format = "{0:." + str(decimals) + "f}"
         percents = str_format.format(100 * (iteration / float(total)))
         filled_length = int(round(bar_length * iteration / float(total)))
@@ -1373,21 +1614,41 @@ class CLI(object):
         return '%s|%s| %s%s %s' % (prefix, bar, percents, '%', suffix)
 
     def set_current_action_status(self, action, statusline):
-        """progress: 0-10"""
+        """Set the current action and status of said action
+
+        Args:
+            action (str): Action currently being ran by the program
+            statusline (str): Progress bar (generated with `get_progress_line`
+        """
         self.clear_line(14)
         self.clear_line(15)
         self.stdscr.addstr(14, 0, "%s" % action)
         self.stdscr.addstr(15, 0, "%s" % statusline)
-        self.print_cat(self.catx, self.caty)
+        self.print_cat(self._catx, self._caty)
         self.stdscr.refresh()
 
     def clear_line(self, y):
+        """Clear a line in the CLI, then reprint the entire cat.
+
+        Args:
+            y (int): line to clear
+
+        """
         self.stdscr.move(y, 0)
         self.stdscr.clrtoeol()
-        self.print_cat(self.catx, self.caty)
+        self.print_cat(self._catx, self._caty)
         self.stdscr.refresh()
 
     def print_cat(self, startx, starty):
+        """Print a cat in curses and a little credit line.
+
+        Warnings:
+            Warning: this cat is very cute
+
+        Args:
+            startx (int): Distance from the left where the cat should start
+            starty (int): Distance from the top where the cat should start
+        """
         if self.cols < 66:
             return
         line1 = '                      (`.-,\')'
@@ -1402,6 +1663,7 @@ class CLI(object):
         lines = [line1, line2, line3, line4, line5, line6, line7, line8, line9]
 
         num = 0
+
         for i in range(starty, starty + 9):
             self.stdscr.addstr(i, startx, lines[num])
             num += 1
@@ -1409,7 +1671,6 @@ class CLI(object):
 
 
 def main():
-    # Parse CLI args
     parser = argparse.ArgumentParser(description='Bot To Add Titles To Images')
     parser.add_argument('-d', '--debug', help='Enable Debug Logging', action='store_true')
     parser.add_argument('-l', '--loop', help='Enable Looping Function', action='store_true')
@@ -1492,8 +1753,8 @@ def main():
             bot.call_checks(args.limit)
             interface.set_current_action_status('Checking Complete', "")
             time.sleep(args.interval)
-
     except KeyboardInterrupt:
+        # WARNING: THIS WILL NOT WORK WITH FOREVER.SH FOR WHATEVER DUMB REASON
         print("Command line debugging enabled")
         # TODO: Clean this up w/ curse
 
@@ -1502,18 +1763,28 @@ def main():
         curses.nocbreak()
         curses.endwin()
         interface.killflag = True
-        os.system('stty sane')
-        os.system('clear')
+        #os.system('stty sane')
+        #os.system('clear')
         print('Interface and threads killed. Command line debugging enabled. Non-threaded functions still active\n')
-        print('Ctrl+C again to end the program.')
+        print('Ctrl+C again to end the program.\n')
+        maxfails = 5
+        fails = 0
         while True:
             try:
-                command = raw_input(">>>    ")
+                command = input(">>>    ")
             except KeyboardInterrupt:
                 break
+            except EOFError:
+                if fails == 5:
+                    break
+                fails += 1
+                continue
             if str(command) == "quit":
                 break
-            exec(command)
+            try:
+                exec(command)
+            except Exception as ex:
+                print("Failed with exception %s\n" % ex)
         logging.debug("KeyboardInterrupt Detected, Cleaning up and exiting...")
         print("Cleaning up and exiting...")
         database.cleanup()

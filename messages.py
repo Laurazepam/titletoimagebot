@@ -37,7 +37,7 @@ Unfortunately, it looks like I'm banned in the sub I was summoned in.
 Feel free to post this link in the comment you summoned me in!.\n\n
 ---\n\n
 Summon me with /u/title2imagebot | 
-[About](http://calicocat.live/t2ib) | 
+[About](http://calico.live/t2ib) | 
 [feedback](https://reddit.com/message/compose/?to=CalicoCatalyst&subject=feedback%20{submission_id}) | 
 [source](https://github.com/calicocatalyst/titletoimagebot) | 
 Fork of TitleToImageBot
@@ -48,7 +48,7 @@ PM_reply_template = '''[Image with added {custom}title]({image_url}) {nsfw}\n\n
 {warntag}\n\n
 ---\n\n
 Summon me with /u/title2imagebot or by PM! |
-[About](http://calicocat.live/t2ib) | 
+[About](http://calico.live/t2ib) | 
 [feedback](https://reddit.com/message/compose/?to=CalicoCatalyst&subject=feedback%20{submission_id}) | 
 [source](https://github.com/calicocatalyst/titletoimagebot) | 
 Fork of TitleToImageBot
@@ -60,7 +60,7 @@ de_reply_template = '''[Bild mit hinzugefügtem {custom}Titel]({image_url}) {nsf
 ---\n\n
 ^Rufen ^Sie ^mich ^mit ^/u/Title2ImageBot ^an ^oder ^senden ^Sie ^mir ^einen ^Link ^zu ^einem ^Beitrag ^mit 
 ^dem ^Betreff ^"parse". ^| 
-[^Info](http://calicocat.live/t2ib) ^| 
+[^Info](http://calico.live/t2ib) ^| 
 [^Schrei ^mich ^an ^oder ^hilf ^mir ^zu ^übersetzen](https://reddit.com/message/compose/?to=CalicoCatalyst&subject=feedback) ^| 
 [^Quellcode](https://github.com/calicocatalyst/titletoimagebot) ^| 
 ^Git ^Fork ^aus ^TitleToImageBot'''
