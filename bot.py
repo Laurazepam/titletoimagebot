@@ -47,7 +47,8 @@ __version__ = '1.1.3.0'
 
 
 class TitleToImageBot(object):
-    """
+    """Class for the bot itself.
+
     Attributes:
         config (Configuration): Bot Configuration Object
         reddit (praw.Reddit): Reddit client object
