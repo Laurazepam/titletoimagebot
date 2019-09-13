@@ -1,6 +1,6 @@
 # Title2ImageBot
 
-Rewrite of original bot by gerenook
+Rewrite of original bot that was written by gerenook. Reddit bot for adding contents of title to image. 
 
 ## Features
 
@@ -45,6 +45,10 @@ It includes comments that note different things to the inspector. I would highly
 project, or just in general as it makes working with python feel as scalable as working with more industrial
 programming languages.
 
+#### Docstrings
+
+Docstrings are written in Google's python docstring format
+
 ### Running the bot
 
 (Please dont try to run another bot unless /u/Title2ImageBot is shut down for good. Running it on your own sub is fine, but if you want DM me and I can set this one to automatically run on your sub)
@@ -82,16 +86,17 @@ Ctrl+C again to quit
 ### Command Line Debugging
 
 Command line debugging is a feature I have admittedly not used at any point. Regardless, its cool
-to have. Ctrl+C (KeyboardInterrupt) to:
+to have. *This wont work with the forever.sh script due to it not handling things like a normal CLI.*
+
+Ctrl+C (KeyboardInterrupt) to:
 
 1. Kill any active threads
 2. End curses session
 3. Set the killflag in `CLI()` to keep it from updating again
-4. Run `stty sane; clear` in console to clear up the Threading screwups
-5. Start a `while True` loop that eval()'s `raw_input('>>>   ')`
+4. Start a `while True` loop that eval()'s `raw_input('>>>   ')`
 
-CTRL+C (KeyboardInterrupt) again to kill everything, clear curses again (to be safe idk), run 
-`stty sane; clear` again, and `exit(0)` 
+type `quit` to kill everything, clear curses again (to be safe idk), run 
+`stty sane; clear`, and `exit(0)` 
 
 ### Logging
 
