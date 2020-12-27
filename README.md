@@ -1,3 +1,5 @@
+WIP - Attempt to revive this bot
+
 # Title2ImageBot
 
 Rewrite of original bot that was written by gerenook. Reddit bot for adding contents of title to image. 
