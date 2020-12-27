@@ -1,8 +1,8 @@
-WIP - Attempt to revive this bot
+WIP
 
-# Title2ImageBot
+# 2Title2Image
 
-Rewrite of original bot that was written by gerenook. Reddit bot for adding contents of title to image. 
+Revival of CalicoCatalyst's fork of original bot that was written by gerenook. Reddit bot for adding contents of title to image. 
 
 ## Features
 
@@ -120,7 +120,6 @@ function without it, it's not written for it, so be aware of this.
 
 /u/gerenook for original bot's code, most of the `RedditImage` class is his work.
 
-Roboto-Emoji is a custom font I created in FontForge that adds support for emojis.  
-Feel free to use it. 
+CalicoCatalyst for Roboto-Emoji, a custom font CalicoCatalyst created in FontForge that adds support for emojis.  
 
-GfyPy is a gfycat python api I wrote with extremely basic support for what i needed. It's on my pinned repositories tab. Feel free to contribute as it's currently the only gfycat python api with auth support
+CalicoCatalyst for GfyPy, a gfycat python api. It's on CalicoCatalyst's pinned repositories tab. It's currently the only gfycat python api with auth support
